@@ -92,23 +92,52 @@ class Robot:
             self.change_controller()
 
     def velocity_callback(self, msg):
-        
+
         if msg.robot_id == self.robot_id:
             self.command.velocity = np.array([
                 msg.cmd_vel.linear.x,
                 msg.cmd_vel.linear.y,
                 msg.cmd_vel.linear.z
             ])  #  [x, y, z]
-            
+
             self.command.yaw_rate = np.array([
                 msg.cmd_vel.angular.x,
                 msg.cmd_vel.angular.y,
                 msg.cmd_vel.angular.z
             ])  # numpy  [roll, pitch, yaw]
-            
+
+            # angular.x/y (roll/pitch "rate") are NOT a safe user-commandable body
+            # tilt in this controller: TrotStanceController.position_delta()
+            # integrates them straight into stance foot position every tick with
+            # no spring-back to zero, and TrotGaitController.step()'s idle check
+            # (np.all(command.yaw_rate == 0)) treats any nonzero value as "must
+            # trot" -- so a held pitch command drives continuous, non-recovering
+            # foot drift that looks exactly like forward/backward walking. It is
+            # only ever meant to receive small automatic IMU-stabilization
+            # correction (see use_imu / pid_controller.run(imu_roll, imu_pitch)
+            # in TrotGaitController.step()), not raw user input. Force it off here.
+            self.command.yaw_rate[0] = 0.0
+            self.command.yaw_rate[1] = 0.0
+
+            # linear.z is otherwise dead (command.velocity[2] is never read by any
+            # gait controller) -- repurpose it as a stance-height adjust rate, the
+            # nearest thing to a real, working "up/down" body control this
+            # architecture actually supports. robot_height is stored negative
+            # (see StateCommand.Command.__init__: -default_height); more negative
+            # = taller stance, less negative = crouched. Clamped conservatively
+            # around the 0.25 m default -- narrow this further if it over-extends
+            # the legs at the limits.
+            HEIGHT_STEP = 0.0015
+            HEIGHT_MIN, HEIGHT_MAX = -0.32, -0.15
+            if msg.cmd_vel.linear.z != 0.0:
+                sign = 1.0 if msg.cmd_vel.linear.z > 0 else -1.0
+                self.command.robot_height = min(HEIGHT_MAX, max(HEIGHT_MIN,
+                    self.command.robot_height - sign * HEIGHT_STEP))
+
             if self.node.verbose:
                 self.node.get_logger().info(
-                    f"Velocity command updated: linear={self.command.velocity}, angular={self.command.yaw_rate}"
+                    f"Velocity command updated: linear={self.command.velocity}, "
+                    f"angular={self.command.yaw_rate}, height={self.command.robot_height}"
                 )
 
     def handle_behavior_command(self, request, response):

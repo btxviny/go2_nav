@@ -18,7 +18,9 @@
   <exec_depend>urdf</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>rviz2</exec_depend>
-  <exec_depend>gazebo_plugins</exec_depend>
+  <!-- gazebo_plugins (Gazebo Classic) removed: unused (no find_package in
+       CMakeLists.txt) and unavailable for Jazzy, which dropped Classic support.
+       This xacro is already gz-sim native (gz_ros2_control, gz::sim::systems::*). -->
 
   <export>
     <build_type>ament_cmake</build_type>
