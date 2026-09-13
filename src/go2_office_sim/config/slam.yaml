@@ -67,11 +67,38 @@
     minimum_travel_heading: 0.2
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 25.0
-    link_match_minimum_response_fine: 0.1
+    # 0.15, not stock 0.1: local scan-to-scan linking is what accumulates
+    # into drift between loop closures (loop closure only corrects *after*
+    # error has already built up), so a slightly stricter bar here means a
+    # marginal local match is more likely to fall back on raw KISS-ICP odometry
+    # for that one link rather than getting baked into the pose graph as if
+    # it were a good match. Small step, not stock's 0.1 doubled or more --
+    # too strict starves the graph of links entirely on a noisier-than-usual
+    # scan (self-hit noise from the walking gait).
+    link_match_minimum_response_fine: 0.15
     link_scan_maximum_distance: 1.5
-    loop_search_maximum_distance: 3.0
+    # Revised after a live regression: an earlier attempt widened this alone
+    # (3.0 -> 6.0) to help loop closure tolerate KISS-ICP's larger drift (no
+    # wheel/IMU anchor for short-term correction), but that made drift worse,
+    # not better -- a wider *search* radius without also raising the
+    # *acceptance* bar increased the odds of a false loop closure, plausible
+    # here since the office has several visually similar workstation pods
+    # (podA/podB/podC) a coarse match could confuse for each other. This time:
+    # widen more moderately (4.5, not 6.0) AND tighten every acceptance
+    # threshold below together, so a farther-away candidate can be
+    # *considered* but only a genuinely high-confidence match gets accepted --
+    # more reach without reopening the false-positive risk.
+    loop_search_maximum_distance: 4.5
     do_loop_closing: true
     loop_match_minimum_chain_size: 10
-    loop_match_maximum_variance_coarse: 3.0
-    loop_match_minimum_response_coarse: 0.35
-    loop_match_minimum_response_fine: 0.45
+    # 2.0, not stock 3.0: tighter pose-uncertainty ceiling for even
+    # considering a coarse candidate a fine-match attempt, paired with the
+    # wider search radius above.
+    loop_match_maximum_variance_coarse: 2.0
+    # 0.45/0.55, not stock 0.35/0.45: both response thresholds raised the
+    # same ~0.1 amount, requiring a noticeably better scan-correlation score
+    # before accepting a loop closure at all -- this is the actual guard
+    # against the podA/podB/podC-style false-positive risk the wider search
+    # radius reintroduces.
+    loop_match_minimum_response_coarse: 0.45
+    loop_match_minimum_response_fine: 0.55

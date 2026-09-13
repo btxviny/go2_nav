@@ -53,11 +53,32 @@
       # after) and increased per-scan point/voxel count -- the opposite of
       # what this file is for. 0.5 keeps per-scan cost low while still
       # giving reasonable detail in a ~20x20m room.
-      voxel_size: 0.5
+      # 0.4, not 0.5: "more robust against drift" per direct ask -- drift is
+      # a front-end (odometry) problem first, so a moderately finer voxel
+      # grid for registration itself reduces how much error accumulates per
+      # scan, rather than only trying to correct it after the fact via
+      # slam_toolbox's loop closure. Not pushed lower than this: keyboard_
+      # teleop.py's new default speed cap already reduces the CPU-contention
+      # risk that motivated keeping this coarse, but going much finer (e.g.
+      # 0.2-0.3) would meaningfully raise per-scan point/voxel count on a
+      # machine that has already crashed once under real load this project.
+      voxel_size: 0.4
       max_points_per_voxel: 20
 
     adaptive_threshold:
-      initial_threshold: 2.0
+      # 1.0, not 2.0: "more robust against drift" -- this is the correspondence
+      # search radius ICP uses before enough real motion history exists to
+      # adapt it automatically, and keyboard_teleop.py's new default speed
+      # cap (see its own comment) means the actual inter-scan displacement
+      # this stack sees day to day is now smaller than 2.0 was sized for.
+      # A tighter starting radius means early correspondences are held to a
+      # stricter geometric consistency check, reducing the odds of a loose/
+      # wrong match getting baked into the very first few scans -- at the
+      # cost of needing a genuinely large single-scan motion (a sudden fast
+      # teleop burst) to still register correctly, which is an accepted
+      # trade for a system this ask is explicitly trying to make less
+      # sensitive to fast movement in the first place.
+      initial_threshold: 1.0
       min_motion_th: 0.1
 
     registration:

@@ -70,11 +70,15 @@ class RobotVelocityHandler(Node):
         # confirmed live as the actual cause of "walks fast but turns very
         # slowly" surviving every Nav2-side speed increase. 2.0 leaves
         # headroom above both of those instead of reintroducing the same cap.
-        # 2.5, not 2.0: "steer faster" per direct ask -- nav2_params.yaml's
-        # rotate_to_heading_angular_vel/velocity_smoother were raised again
-        # (to 2.0 / 2.3 rad/s), so this needs the same headroom bump or it
-        # becomes the new silent cap.
-        new_msg.cmd_vel.angular.z = self.limit(msg.angular.z, -2.5, 2.5)
+        # Pulled back down to 1.5 (was 2.5) alongside nav2_params.yaml's
+        # rotate_to_heading_angular_vel drift-regression revert (2.0 -> 1.0
+        # rad/s there): the cumulative rotation-speed increases across this
+        # session are the likely actual cause of a drift regression --
+        # KISS-ICP has no per-point deskewing on this lidar, so faster
+        # rotation directly means more per-scan motion distortion. 1.5 keeps
+        # headroom above the new 1.0/1.3 rad/s targets without reintroducing
+        # the higher speeds that were the point of suspicion.
+        new_msg.cmd_vel.angular.z = self.limit(msg.angular.z, -1.5, 1.5)
 
         self.publisher_.publish(new_msg)
         if self.verbose:

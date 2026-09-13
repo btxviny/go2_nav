@@ -97,21 +97,25 @@ controller_server:
       # triggered -- 0.5 rad/s meant even a 90 degree turn took ~3s of just
       # standing and spinning, a big contributor to feeling "hesitant" on
       # anything but a dead-straight path.
-      # 1.6, not 1.0: "turns too slow" -- 1.0 rad/s still made a 90deg pivot
-      # take ~1s of standing still, noticeable now that cruise speed is fast.
-      # 2.0, not 1.6: "steer faster" per direct ask -- confirmed live headroom
-      # existed (cmd_vel_pub.py's downstream clamp and velocity_smoother's cap
-      # were both above 1.6 already), so this and the two knobs below were
-      # raised together to actually use it.
-      rotate_to_heading_angular_vel: 2.0
+      # Pulled back down from 2.0 (which had itself been raised from 1.6,
+      # from 1.0, from this original 0.5): confirmed live that the
+      # cumulative 4x rotation-speed increase across this session's "turns
+      # too slow"/"steer faster" tuning is the likely actual cause of a
+      # drift regression -- KISS-ICP has no per-point deskewing on this
+      # lidar (no per-point timestamps), so faster rotation directly means
+      # more lidar-sweep motion distortion per scan, and this stack's SLAM
+      # tuning was only ever validated at the original, slower speed. 1.0
+      # keeps some of the responsiveness gained this session without the
+      # most extreme end of it.
+      rotate_to_heading_angular_vel: 1.0
       # 2.5, not 1.5: lets the controller actually reach the higher angular
       # target quickly instead of ramping into it slowly, and also speeds up
       # how fast it can react to path curvature while cruising (not just
       # dedicated rotate-in-place spins).
-      # 3.5, not 2.5: "steer faster" -- matches the rotate_to_heading_angular_vel
-      # bump above with a proportionally faster ramp to it, so the higher top
-      # speed isn't spent mostly accelerating into.
-      max_angular_accel: 3.5
+      # 1.8, not 3.5: pulled back down alongside rotate_to_heading_angular_vel
+      # above, same drift-regression reasoning -- roughly the same
+      # accel:vel ratio as the original 1.5:0.5.
+      max_angular_accel: 1.8
       max_linear_accel: 1.0
       max_linear_decel: 1.0
       min_turning_radius: 0.0
@@ -242,12 +246,12 @@ behavior_server:
     robot_base_frame: base_link
     transform_tolerance: 1.0  # see FollowPath's comment above
     simulate_ahead_time: 2.0
-    # Raised alongside FollowPath's rotate_to_heading_angular_vel above, same
-    # "turns too slow" / "steer faster" ask -- this is the Spin recovery
+    # Pulled back down alongside FollowPath's rotate_to_heading_angular_vel
+    # above, same drift-regression reasoning -- this is the Spin recovery
     # behavior's own speed, a separate knob from path-following rotation.
-    max_rotational_vel: 1.6
+    max_rotational_vel: 1.0
     min_rotational_vel: 0.1
-    rotational_acc_lim: 3.0
+    rotational_acc_lim: 1.8
 
 waypoint_follower:
   ros__parameters:
@@ -265,16 +269,16 @@ velocity_smoother:
     # rotate_to_heading_angular_vel (1.0) above -- these caps were only
     # slightly above the old targets, so without raising them too, the
     # smoother would have silently clipped the new targets right back down.
-    # Angular cap raised to 2.3 (was 1.9) to give headroom above FollowPath's
-    # new 2.0 rad/s rotate_to_heading_angular_vel ("steer faster" ask) --
-    # otherwise the smoother would silently clip the faster turn right back
-    # down, same reasoning as the original 1.1->1.9 bump documented here.
-    max_velocity: [0.45, 0.0, 2.3]
-    min_velocity: [-0.45, 0.0, -2.3]
-    # 3.6, not 2.5: matches FollowPath's max_angular_accel bump to 3.5 (plus
-    # headroom) so the smoother doesn't cap the faster ramp-up right back down.
-    max_accel: [1.0, 0.0, 3.6]
-    max_decel: [-1.0, 0.0, -3.6]
+    # Angular cap pulled back down to 1.3 (was 2.3) alongside FollowPath's
+    # rotate_to_heading_angular_vel drift-regression revert above -- still
+    # headroom above the new 1.0 rad/s target so the smoother doesn't clip
+    # it, same reasoning as every prior bump/revert documented here.
+    max_velocity: [0.45, 0.0, 1.3]
+    min_velocity: [-0.45, 0.0, -1.3]
+    # 2.2, not 3.6: matches FollowPath's max_angular_accel revert to 1.8
+    # (plus headroom) so the smoother doesn't cap the ramp-up right back down.
+    max_accel: [1.0, 0.0, 2.2]
+    max_decel: [-1.0, 0.0, -2.2]
     odom_topic: /robot1/odom
     odom_duration: 0.1
 
