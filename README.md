@@ -21,7 +21,11 @@ Blender scene  ──export_sdf.py──>  Gazebo world + robot  ──sensors +
 
 ## Quick start
 
-Each of these goes in its own terminal, left running:
+```bash
+./src/go2_office_sim/scripts/run_stack.sh 
+```
+
+Or Each of these goes in its own terminal, left running:
 
 ```bash
 # Terminal 1 — the simulation: world, robot, sensors, locomotion
