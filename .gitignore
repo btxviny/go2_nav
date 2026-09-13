@@ -1,0 +1,20 @@
+# colcon build artifacts -- generated, not source
+/install/
+/build/
+/log/
+
+# rosbag output
+/bags/
+
+# Blender source assets: 514MB of Poly Haven CC0 source textures, only
+# needed to regenerate the office scene from scratch. See blender/README.md
+# for how to re-obtain them. The actual runtime asset (office.blend,
+# src/go2_office_sim/models/office_scene/) is small and IS committed.
+/blender/assets/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Local Claude Code settings (personal, not shared)
+.claude/settings.local.json

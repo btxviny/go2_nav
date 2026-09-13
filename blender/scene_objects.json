@@ -1,0 +1,991 @@
+{
+  "description": "Semantic map of office.blend. World coordinates in metres, floor at z=0, ceiling at 3.2 m, room interior spans x,y in [-10, 10].",
+  "target_query_example": "'go to the rubber duck' -> object 'rubber_duck_toy'",
+  "rooms": [
+    {
+      "name": "conference_room",
+      "label": "conference room",
+      "bounds": [
+        [
+          3.0,
+          3.0
+        ],
+        [
+          10.0,
+          10.0
+        ]
+      ],
+      "centre": [
+        6.5,
+        6.4
+      ],
+      "door": [
+        3.7,
+        3.0
+      ]
+    },
+    {
+      "name": "private_office",
+      "label": "private office",
+      "bounds": [
+        [
+          -10.0,
+          4.6
+        ],
+        [
+          -4.4,
+          10.0
+        ]
+      ],
+      "centre": [
+        -7.2,
+        7.3
+      ],
+      "door": [
+        -5.4,
+        4.6
+      ]
+    },
+    {
+      "name": "break_area",
+      "label": "break room / kitchenette",
+      "bounds": [
+        [
+          -4.3,
+          4.7
+        ],
+        [
+          2.9,
+          10.0
+        ]
+      ],
+      "centre": [
+        -0.7,
+        7.4
+      ]
+    },
+    {
+      "name": "lounge",
+      "label": "lounge seating area",
+      "bounds": [
+        [
+          4.6,
+          -4.2
+        ],
+        [
+          9.8,
+          0.9
+        ]
+      ],
+      "centre": [
+        6.8,
+        -1.6
+      ]
+    },
+    {
+      "name": "reception",
+      "label": "reception / entrance",
+      "bounds": [
+        [
+          -4.2,
+          -10.0
+        ],
+        [
+          3.4,
+          -6.4
+        ]
+      ],
+      "centre": [
+        0.0,
+        -8.6
+      ]
+    },
+    {
+      "name": "open_plan",
+      "label": "open-plan work area",
+      "bounds": [
+        [
+          -10.0,
+          -10.0
+        ],
+        [
+          10.0,
+          4.6
+        ]
+      ],
+      "centre": [
+        -4.0,
+        -2.0
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "name": "podA_workstation0",
+      "semantic_label": "desk / workstation 1",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -7.35,
+        1.65,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podA_workstation1",
+      "semantic_label": "desk / workstation 2",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -5.65,
+        1.65,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podA_workstation2",
+      "semantic_label": "desk / workstation 3",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -7.35,
+        0.75,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podA_workstation3",
+      "semantic_label": "desk / workstation 4",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -5.65,
+        0.75,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podB_workstation0",
+      "semantic_label": "desk / workstation 1",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -7.35,
+        -3.15,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podB_workstation1",
+      "semantic_label": "desk / workstation 2",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -5.65,
+        -3.15,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podB_workstation2",
+      "semantic_label": "desk / workstation 3",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -7.35,
+        -4.05,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podB_workstation3",
+      "semantic_label": "desk / workstation 4",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -5.65,
+        -4.05,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podC_workstation0",
+      "semantic_label": "desk / workstation 1",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -1.45,
+        -2.05,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podC_workstation1",
+      "semantic_label": "desk / workstation 2",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -1.45,
+        -0.35,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podC_workstation2",
+      "semantic_label": "desk / workstation 3",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -0.55,
+        -2.05,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "podC_workstation3",
+      "semantic_label": "desk / workstation 4",
+      "category": "workstation",
+      "zone": "open_plan",
+      "location": [
+        -0.55,
+        -0.35,
+        0.0
+      ],
+      "size": [
+        1.6,
+        0.8,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "reception_desk",
+      "semantic_label": "reception desk",
+      "category": "furniture",
+      "zone": "reception",
+      "location": [
+        0.0,
+        -8.0,
+        0.0
+      ],
+      "size": [
+        2.9,
+        1.5,
+        1.05
+      ],
+      "is_target": false
+    },
+    {
+      "name": "reception_plant",
+      "semantic_label": "potted plant by reception",
+      "category": "plant",
+      "zone": "reception",
+      "location": [
+        2.6,
+        -8.9,
+        0.0
+      ],
+      "size": [
+        0.9,
+        0.9,
+        1.6
+      ],
+      "is_target": false
+    },
+    {
+      "name": "lounge_sofa",
+      "semantic_label": "grey sofa in the lounge",
+      "category": "furniture",
+      "zone": "lounge",
+      "location": [
+        7.6,
+        -1.6,
+        0.0
+      ],
+      "size": [
+        2.1,
+        0.88,
+        0.85
+      ],
+      "is_target": false
+    },
+    {
+      "name": "lounge_coffee_table",
+      "semantic_label": "coffee table in the lounge",
+      "category": "furniture",
+      "zone": "lounge",
+      "location": [
+        6.0,
+        -1.6,
+        0.0
+      ],
+      "size": [
+        1.1,
+        0.6,
+        0.42
+      ],
+      "is_target": false
+    },
+    {
+      "name": "lounge_plant",
+      "semantic_label": "large potted plant in the lounge",
+      "category": "plant",
+      "zone": "lounge",
+      "location": [
+        8.9,
+        0.9,
+        0.0
+      ],
+      "size": [
+        1.0,
+        1.0,
+        1.8
+      ],
+      "is_target": false
+    },
+    {
+      "name": "printer_station",
+      "semantic_label": "office printer",
+      "category": "appliance",
+      "zone": "open_plan",
+      "location": [
+        -9.45,
+        -7.6,
+        0.0
+      ],
+      "size": [
+        0.62,
+        0.55,
+        0.8
+      ],
+      "is_target": false
+    },
+    {
+      "name": "filing_cabinet_1",
+      "semantic_label": "filing cabinets",
+      "category": "furniture",
+      "zone": "open_plan",
+      "location": [
+        -9.55,
+        -5.35,
+        0.0
+      ],
+      "size": [
+        0.45,
+        2.4,
+        1.05
+      ],
+      "is_target": false
+    },
+    {
+      "name": "clock_west",
+      "semantic_label": "wall clock",
+      "category": "decor",
+      "zone": "open_plan",
+      "location": [
+        -9.92,
+        -1.0,
+        2.35
+      ],
+      "size": [
+        0.34,
+        0.05,
+        0.34
+      ],
+      "is_target": false
+    },
+    {
+      "name": "collab_table",
+      "semantic_label": "standing collaboration table",
+      "category": "furniture",
+      "zone": "open_plan",
+      "location": [
+        2.6,
+        -4.7,
+        0.0
+      ],
+      "size": [
+        1.04,
+        1.04,
+        1.05
+      ],
+      "is_target": false
+    },
+    {
+      "name": "conference_table",
+      "semantic_label": "conference table",
+      "category": "furniture",
+      "zone": "conference_room",
+      "location": [
+        6.5,
+        6.4,
+        0.0
+      ],
+      "size": [
+        3.4,
+        1.4,
+        0.75
+      ],
+      "is_target": false
+    },
+    {
+      "name": "whiteboard",
+      "semantic_label": "whiteboard",
+      "category": "decor",
+      "zone": "conference_room",
+      "location": [
+        5.4,
+        9.92,
+        1.5
+      ],
+      "size": [
+        2.4,
+        0.06,
+        1.2
+      ],
+      "is_target": false
+    },
+    {
+      "name": "conference_screen",
+      "semantic_label": "wall-mounted display screen",
+      "category": "appliance",
+      "zone": "conference_room",
+      "location": [
+        8.6,
+        9.92,
+        1.7
+      ],
+      "size": [
+        1.6,
+        0.06,
+        0.92
+      ],
+      "is_target": false
+    },
+    {
+      "name": "conference_credenza",
+      "semantic_label": "credenza cabinet",
+      "category": "furniture",
+      "zone": "conference_room",
+      "location": [
+        3.6,
+        8.6,
+        0.0
+      ],
+      "size": [
+        0.45,
+        1.6,
+        0.75
+      ],
+      "is_target": false
+    },
+    {
+      "name": "private_office_desk",
+      "semantic_label": "manager's desk",
+      "category": "workstation",
+      "zone": "private_office",
+      "location": [
+        -7.4,
+        7.6,
+        0.0
+      ],
+      "size": [
+        1.8,
+        0.9,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "kitchen_counter",
+      "semantic_label": "kitchen counter / kitchenette",
+      "category": "furniture",
+      "zone": "break_area",
+      "location": [
+        -1.9,
+        9.6,
+        0.0
+      ],
+      "size": [
+        3.0,
+        0.66,
+        0.9
+      ],
+      "is_target": false
+    },
+    {
+      "name": "water_cooler",
+      "semantic_label": "water cooler",
+      "category": "appliance",
+      "zone": "break_area",
+      "location": [
+        -4.0,
+        9.4,
+        0.0
+      ],
+      "size": [
+        0.34,
+        0.34,
+        1.45
+      ],
+      "is_target": false
+    },
+    {
+      "name": "break_table",
+      "semantic_label": "round break-room table",
+      "category": "furniture",
+      "zone": "break_area",
+      "location": [
+        0.6,
+        6.6,
+        0.0
+      ],
+      "size": [
+        1.2,
+        1.2,
+        0.74
+      ],
+      "is_target": false
+    },
+    {
+      "name": "coffee_machine",
+      "semantic_label": "coffee machine",
+      "category": "appliance",
+      "zone": "break_area",
+      "location": [
+        -3.0,
+        9.6,
+        0.9
+      ],
+      "size": [
+        0.3,
+        0.34,
+        0.42
+      ],
+      "is_target": false
+    },
+    {
+      "name": "lockers",
+      "semantic_label": "staff lockers",
+      "category": "furniture",
+      "zone": "break_area",
+      "location": [
+        -4.05,
+        6.2,
+        0.0
+      ],
+      "size": [
+        0.45,
+        1.7,
+        1.85
+      ],
+      "is_target": false
+    },
+    {
+      "name": "noticeboard",
+      "semantic_label": "notice board",
+      "category": "decor",
+      "zone": "break_area",
+      "location": [
+        -4.14,
+        8.3,
+        1.6
+      ],
+      "size": [
+        0.05,
+        1.5,
+        1.0
+      ],
+      "is_target": false
+    },
+    {
+      "name": "lounge_armchair_0",
+      "semantic_label": "mustard accent armchair",
+      "category": "furniture",
+      "zone": "lounge",
+      "location": [
+        5.5,
+        -3.5,
+        0.0
+      ],
+      "size": [
+        0.95,
+        0.82,
+        0.85
+      ],
+      "is_target": false
+    },
+    {
+      "name": "lounge_armchair_1",
+      "semantic_label": "rust-coloured accent armchair",
+      "category": "furniture",
+      "zone": "lounge",
+      "location": [
+        5.5,
+        0.35,
+        0.0
+      ],
+      "size": [
+        0.95,
+        0.82,
+        0.85
+      ],
+      "is_target": false
+    },
+    {
+      "name": "floor_lamp",
+      "semantic_label": "floor lamp",
+      "category": "appliance",
+      "zone": "lounge",
+      "location": [
+        8.8,
+        -3.4,
+        0.0
+      ],
+      "size": [
+        0.4,
+        0.4,
+        1.75
+      ],
+      "is_target": false
+    },
+    {
+      "name": "rubber_duck_toy",
+      "semantic_label": "rubber duck",
+      "category": "toy",
+      "zone": "open_plan",
+      "location": [
+        -7.87,
+        1.67,
+        0.74
+      ],
+      "size": [
+        0.21,
+        0.3,
+        0.29
+      ],
+      "is_target": true
+    },
+    {
+      "name": "wooden_display_shelves_01",
+      "semantic_label": "wooden display shelf",
+      "category": "furniture",
+      "zone": "private_office",
+      "location": [
+        -9.4,
+        6.6,
+        0.0
+      ],
+      "size": [
+        0.37,
+        1.08,
+        1.56
+      ],
+      "is_target": false
+    },
+    {
+      "name": "wooden_display_shelves_01_b",
+      "semantic_label": "wooden display shelf by the south wall",
+      "category": "furniture",
+      "zone": "open_plan",
+      "location": [
+        4.0,
+        -9.35,
+        0.0
+      ],
+      "size": [
+        1.08,
+        0.37,
+        1.56
+      ],
+      "is_target": false
+    },
+    {
+      "name": "baseball_01",
+      "semantic_label": "baseball",
+      "category": "toy",
+      "zone": "private_office",
+      "location": [
+        -9.4,
+        6.05,
+        1.03
+      ],
+      "size": [
+        0.075,
+        0.075,
+        0.075
+      ],
+      "is_target": false
+    },
+    {
+      "name": "chess_set",
+      "semantic_label": "chess set on the coffee table",
+      "category": "game",
+      "zone": "lounge",
+      "location": [
+        6.0,
+        -1.6,
+        0.42
+      ],
+      "size": [
+        0.55,
+        0.55,
+        0.1
+      ],
+      "is_target": false
+    },
+    {
+      "name": "SchoolChair_01",
+      "semantic_label": "school chair",
+      "category": "furniture",
+      "zone": "break_area",
+      "location": [
+        1.55,
+        6.6,
+        0.0
+      ],
+      "size": [
+        0.57,
+        0.68,
+        1.0
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cube_red",
+      "semantic_label": "red cube",
+      "category": "cube",
+      "zone": "reception",
+      "location": [
+        2.2,
+        -6.4,
+        0.2
+      ],
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cube_checker_green",
+      "semantic_label": "green checkered cube",
+      "category": "cube",
+      "zone": "reception",
+      "location": [
+        -3.6,
+        -7.6,
+        0.2
+      ],
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cube_blue_glossy",
+      "semantic_label": "glossy blue cube",
+      "category": "cube",
+      "zone": "open_plan",
+      "location": [
+        6.6,
+        -7.2,
+        0.2
+      ],
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cube_wood_yellow",
+      "semantic_label": "wooden cube",
+      "category": "cube",
+      "zone": "open_plan",
+      "location": [
+        -8.3,
+        -8.6,
+        0.2
+      ],
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cube_marble_orange",
+      "semantic_label": "orange marbled cube",
+      "category": "cube",
+      "zone": "open_plan",
+      "location": [
+        1.4,
+        3.6,
+        0.2
+      ],
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cube_stripe_purple",
+      "semantic_label": "purple striped cube",
+      "category": "cube",
+      "zone": "conference_room",
+      "location": [
+        8.6,
+        4.6,
+        0.2
+      ],
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cone_orange",
+      "semantic_label": "orange traffic cone",
+      "category": "cone",
+      "zone": "open_plan",
+      "location": [
+        3.6,
+        -0.6,
+        0.26
+      ],
+      "size": [
+        0.44,
+        0.44,
+        0.55
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cone_red",
+      "semantic_label": "red traffic cone",
+      "category": "cone",
+      "zone": "open_plan",
+      "location": [
+        3.6,
+        -1.7,
+        0.26
+      ],
+      "size": [
+        0.44,
+        0.44,
+        0.55
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cone_yellow",
+      "semantic_label": "yellow traffic cone",
+      "category": "cone",
+      "zone": "open_plan",
+      "location": [
+        -3.4,
+        2.2,
+        0.26
+      ],
+      "size": [
+        0.44,
+        0.44,
+        0.55
+      ],
+      "is_target": false
+    },
+    {
+      "name": "cone_white",
+      "semantic_label": "white traffic cone",
+      "category": "cone",
+      "zone": "open_plan",
+      "location": [
+        0.8,
+        -5.6,
+        0.26
+      ],
+      "size": [
+        0.44,
+        0.44,
+        0.55
+      ],
+      "is_target": false
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Global Options:
+    Fixed Frame: odom
+    Background Color: 48; 48; 48
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Interact
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Names: true
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Description Topic:
+        Value: /robot1/robot_description
+      TF Prefix: ""
+    - Class: rviz_default_plugins/PointCloud2
+      Name: LidarPoints
+      Enabled: true
+      Topic:
+        Value: /robot1/lidar/points
+      Size (m): 0.02
+      Style: Points
+      Color Transformer: AxisColor
+    - Class: rviz_default_plugins/Image
+      Name: CameraColor
+      Enabled: true
+      Topic:
+        Value: /robot1/camera/image
+    - Class: rviz_default_plugins/Image
+      Name: CameraDepth
+      Enabled: true
+      Topic:
+        Value: /robot1/camera/depth_image
+      # Fixed range instead of auto-normalize: rays past the 25m far clip
+      # (gazebo.xacro's depth_camera) return +Inf, and this display's default
+      # auto-normalize computes brightness from the whole frame's min/max --
+      # a handful of Inf pixels (confirmed: ~246/407040, i.e. rays that just
+      # didn't hit anything within range, e.g. looking down a long hallway)
+      # poisons that computation and washes out the ENTIRE image, not just
+      # those pixels. Looks like the depth feed "drops" while stationary and
+      # recovers once the view angle changes enough to move those rays onto
+      # a nearer surface -- it's this display setting, not the sensor or the
+      # topic actually stopping (confirmed: publish rate stays ~15Hz the
+      # whole time). 0-25 matches the sensor's actual configured range.
+      Normalize Range: false
+      Min Value: 0.0
+      Max Value: 25.0
+    - Class: rviz_default_plugins/PointCloud2
+      Name: CameraPoints
+      Enabled: true
+      Topic:
+        Value: /robot1/camera/points
+      Size (m): 0.01
+      Style: Points
+      Color Transformer: RGB8
+    - Class: rviz_default_plugins/LaserScan
+      Name: Scan2D
+      Enabled: true
+      Topic:
+        Value: /robot1/scan
+      Size (m): 0.05
+      Color: 255; 0; 0
+    - Class: rviz_default_plugins/Map
+      Name: Map
+      Enabled: true
+      Topic:
+        Value: /robot1/map
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 12
+      Focal Point:
+        X: 0
+        Y: -5
+        Z: 0
+      Pitch: 0.6
+      Yaw: 1.0
+Window Geometry:
+  Height: 900
+  Width: 1500
