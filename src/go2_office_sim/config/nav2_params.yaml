@@ -13,8 +13,12 @@ bt_navigator:
     odom_topic: /robot1/odom
     bt_loop_duration: 10
     default_server_timeout: 20
-    default_nav_to_pose_bt_xml: "navigate_to_pose_w_replanning_and_recovery.xml"
-    default_nav_through_poses_bt_xml: "navigate_through_poses_w_replanning_and_recovery.xml"
+    # default_nav_to_pose_bt_xml / default_nav_through_poses_bt_xml deliberately
+    # left unset: a bare filename here (no package path) makes bt_navigator's
+    # fopen fail outright ("Couldn't open input XML file"). nav2_bringup's own
+    # stock nav2_params.yaml doesn't set these either (see its comment on this
+    # exact pair) -- bt_navigator's own compiled-in default already resolves to
+    # the correct full path under nav2_bt_navigator's share/behavior_trees dir.
 
 controller_server:
   ros__parameters:
@@ -67,13 +71,27 @@ controller_server:
       regulated_linear_scaling_min_radius: 0.6
       regulated_linear_scaling_min_speed: 0.1
       use_rotate_to_heading: true
-      rotate_to_heading_min_angle: 0.4
+      # 0.7 (~40deg), not 0.4 (~23deg): RegulatedPurePursuit stops and spins
+      # in place any time the path's required heading change exceeds this on
+      # a (re)plan. Phantom-obstacle replanning (see the range_min fix in
+      # pointcloud_to_laserscan.yaml) was making this trigger far more often
+      # than a genuinely sharp turn would need -- raising the threshold means
+      # only real, sharp direction changes get a dedicated spin-in-place
+      # instead of the controller just arcing the path in normally.
+      rotate_to_heading_min_angle: 0.7
       rotate_to_heading_angular_vel: 0.5
       max_angular_accel: 1.5
       max_linear_accel: 1.0
       max_linear_decel: 1.0
       min_turning_radius: 0.0
-      transform_tolerance: 0.2
+      # 0.5, not 0.2: KISS-ICP's odom->base_link TF (docs/autonomous_exploration_plan.adoc's
+      # Option A) is published once per finished scan registration rather than
+      # at a strict fixed rate, so it has real jitter (confirmed live: ~7-10Hz
+      # with up to ~0.3s gaps) that the old fixed-50Hz kinematic odometry never
+      # had. 0.2 was tight enough to cause spurious "extrapolation into the
+      # future" TF failures under normal jitter -- same reasoning applied to
+      # behavior_server and collision_monitor below.
+      transform_tolerance: 0.5
       use_collision_detection: true
       max_robot_pose_search_dist: 5.0
 
@@ -181,7 +199,7 @@ behavior_server:
       plugin: "nav2_behaviors::Wait"
     global_frame: odom
     robot_base_frame: base_link
-    transform_tolerance: 0.2
+    transform_tolerance: 0.5  # see FollowPath's comment above
     simulate_ahead_time: 2.0
     max_rotational_vel: 0.6
     min_rotational_vel: 0.1
@@ -205,3 +223,72 @@ velocity_smoother:
     max_decel: [-1.0, 0.0, -1.5]
     odom_topic: /robot1/odom
     odom_duration: 0.1
+
+# Jazzy's navigation_launch.py always brings this up (no toggle) -- it wasn't
+# configured before because the namespace bug above meant no Nav2 node ever
+# received any of this file, so its own missing config never surfaced.
+# base_frame_id is "base_link" (not stock's "base_footprint"): this project's
+# URDF has no base_footprint frame at all, same reasoning as everywhere else
+# in this file. cmd_vel_in/out_topic left at stock defaults (cmd_vel_smoothed
+# in, cmd_vel out) to match navigation_launch.py's own remapping chain:
+# controller_server -> cmd_vel_nav -> velocity_smoother -> cmd_vel_smoothed
+# -> collision_monitor -> cmd_vel (the real, robot-facing topic).
+collision_monitor:
+  ros__parameters:
+    use_sim_time: true
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+    cmd_vel_in_topic: "cmd_vel_smoothed"
+    cmd_vel_out_topic: "cmd_vel"
+    transform_tolerance: 0.5  # see FollowPath's comment above -- this was the
+    # node actually observed stalling cmd_vel with "Robot to stop due to
+    # invalid source" on every KISS-ICP TF jitter blip before this fix.
+    source_timeout: 1.0
+    base_shift_correction: true
+    stop_pub_timeout: 2.0
+    # FootprintApproach disabled (enabled: false), not removed: an empty
+    # `polygons: []` list crashes collision_monitor outright ("parameter_value_from
+    # failed for parameter 'polygons': No parameter value set", confirmed
+    # live) -- it needs at least one declared polygon. FootprintApproach's
+    # "approach" action originally caused a near-permanent "Robot to approach
+    # for 1.2s away from collision" throttle -- confirmed live via
+    # `/robot1/scan` showing a persistent ~0.46m range reading, well inside
+    # where this legged gait's own swinging front legs pass relative to the
+    # back-mounted lidar's height slice (spawn clearance is designed for
+    # >=1.0m, so a *real* static obstacle that close this early wasn't
+    # plausible). Real obstacle avoidance already happens in the
+    # local/global costmaps (voxel_layer / obstacle_layer + inflation,
+    # consumed by RegulatedPurePursuit's own use_collision_detection) --
+    # collision_monitor exists here only because Jazzy's navigation_launch.py
+    # hard-requires it in its lifecycle list, not because this project wants
+    # a second, independent safety layer this sensitive to self-hit noise
+    # from a walking gait.
+    polygons: ["FootprintApproach"]
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "local_costmap/published_footprint"
+      time_before_collision: 1.2
+      simulation_time_step: 0.1
+      min_points: 6
+      visualize: false
+      enabled: false
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "scan"
+      enabled: true
+
+# Also always brought up by navigation_launch.py, same story as
+# collision_monitor above -- this sim has no charging dock at all, but
+# opennav_docking's configure step hard-errors ("Charging dock plugins not
+# given!") if dock_plugins is empty, so it needs *a* valid plugin declared
+# even though nothing here ever sends a DockRobot/UndockRobot action.
+docking_server:
+  ros__parameters:
+    use_sim_time: true
+    base_frame: "base_link"
+    fixed_frame: "odom"
+    dock_plugins: ["simple_charging_dock"]
+    simple_charging_dock:
+      plugin: "opennav_docking::SimpleChargingDock"

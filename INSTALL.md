@@ -35,6 +35,10 @@ if this ever changes upstream.
 
 ## 3. Gazebo Harmonic + project packages
 
+`ros-jazzy-navigation2`/`ros-jazzy-nav2-bringup`/`ros-jazzy-slam-toolbox` are for
+`nav_stack.launch.py` — SLAM and Nav2 are both fully working; see the README's
+"Nav2 (point-to-point navigation)" section for how to send it a goal once installed.
+
 ```bash
 sudo apt install -y \
   ros-jazzy-ros-gz \

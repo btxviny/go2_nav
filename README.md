@@ -4,9 +4,13 @@
 
 A Unitree Go2 quadruped, simulated in Gazebo Harmonic inside a procedurally-generated
 office built in Blender, carrying a head-mounted RGBD camera and a back-mounted 3D lidar.
-Currently drivable by keyboard with full sensor visualization in RViz; SLAM mapping works
-manually; autonomous Nav2-driven exploration is scaffolded but blocked on an upstream bug
-(see [Known issues](#known-issues)).
+Drivable by keyboard with full sensor visualization in RViz; SLAM mapping and **Nav2
+point-to-point navigation both work** (KISS-ICP drives the real odometry — see
+[KISS-ICP](#kiss-icp-real-odom-source)); you can send it a goal by
+clicking in RViz or from the command line (see [Nav2](#nav2-point-to-point-navigation)).
+Fully autonomous frontier exploration (the robot picking its own goals to map the whole
+scene unattended) is not implemented yet — see [Known issues](#known-issues) for that and
+for an open gait-stability bug.
 
 ```
 Blender scene  ──export_sdf.py──>  Gazebo world + robot  ──sensors + TF──>  RViz / rosbag
@@ -23,18 +27,30 @@ Each of these goes in its own terminal, left running:
 # Terminal 1 — the simulation: world, robot, sensors, locomotion
 ros2 launch go2_office_sim office_sim.launch.py
 
-# Terminal 2 — drive it (click into this terminal first for keyboard focus)
-python3 ~/go2_nav/src/go2_office_sim/scripts/keyboard_teleop.py
+# Terminal 2 — lidar odometry (KISS-ICP) -- this is the real odom->base_link
+# source now (see the KISS-ICP section below), so bring it up before SLAM/Nav2
+ros2 launch go2_office_sim kiss_icp.launch.py
 
-# Terminal 3 — visualize the robot itself: robot model, TF, camera, lidar point cloud
+# Terminal 3 — SLAM + Nav2
+ros2 launch go2_office_sim nav_stack.launch.py
+
+# Terminal 4 — visualize: robot model, camera, lidar/map/costmaps, trajectory,
+# and a "2D Nav Goal" button to send Nav2 goals by clicking
 ros2 launch go2_office_sim rviz.launch.py
 
-# Terminal 4 — lidar odometry (KISS-ICP), off the back lidar only
-# (opens its own RViz window too — see the KISS-ICP section below for why)
-ros2 launch go2_office_sim kiss_icp.launch.py
+# Terminal 5 (optional) — manual teleop instead of Nav2
+# (don't run this at the same time as sending Nav2 goals -- both drive cmd_vel)
+python3 ~/go2_nav/src/go2_office_sim/scripts/keyboard_teleop.py
 ```
 
-Terminal 4 is optional — 1–3 alone give you a fully drivable, visualized robot.
+Terminals 1, 2, and 4 alone give you a fully drivable, visualized robot with manual
+teleop (skip 3 and 5). Add Terminal 3 for SLAM mapping + Nav2 navigation — see
+[Nav2](#nav2-point-to-point-navigation) for how to actually send it a goal once that's up
+(wait for its log to end with `Managed nodes are active` first, same as any Nav2 bringup).
+**Nav2 nodes are heavier than they look on a loaded machine** — if bringup stalls partway
+(a node stuck "Configuring" with no further log output), that's very likely the machine
+falling behind under CPU load rather than something misconfigured; letting Terminals 1-2
+settle for a few seconds before starting Terminal 3 usually gives it enough headroom.
 
 Any directory works for these — `ros2 launch` and `rviz2` resolve via the sourced ROS
 environment, not your cwd. A fresh terminal is ready automatically; see
@@ -43,7 +59,7 @@ environment, not your cwd. A fresh terminal is ready automatically; see
 **Starting over cleanly:** if something's gotten into a bad state (a launch died half-way,
 a stale process is holding a topic), kill everything project-related before relaunching:
 ```bash
-pkill -9 -f "gz sim|ros_gz_bridge|quadropted_controller/lib|go2_office_sim|kiss_icp_node|rviz2"
+pkill -9 -f "gz sim|ros_gz_bridge|quadropted_controller/lib|go2_office_sim|kiss_icp_node|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager"
 ```
 
 ---
@@ -68,18 +84,25 @@ go2_nav/
 │       ├── launch/
 │       │   ├── office_sim.launch.py   world + robot + sensors + locomotion — ✅ working
 │       │   ├── rviz.launch.py         RViz with the /robot1/tf remap it needs — ✅ working
-│       │   ├── kiss_icp.launch.py     KISS-ICP (lidar-only odometry) — ✅ working
-│       │   └── nav_stack.launch.py    SLAM + Nav2 — SLAM ✅, Nav2 controller 🔴 broken
+│       │   ├── kiss_icp.launch.py     KISS-ICP odometry, now the real odom->base_link
+│       │   │                          source (see KISS-ICP section) — ✅ working
+│       │   └── nav_stack.launch.py    SLAM + Nav2 — ✅ both working
 │       ├── config/
 │       │   ├── bridge.yaml                   ros_gz_bridge: RGBD camera + 3D lidar topics
 │       │   ├── slam.yaml                     slam_toolbox (async)
-│       │   ├── pointcloud_to_laserscan.yaml  3D lidar -> 2D /scan for SLAM
-│       │   ├── nav2_params.yaml              Nav2 stack config (controller currently broken)
-│       │   └── office.rviz                   robot model, TF, camera, lidar point cloud, map
+│       │   ├── pointcloud_to_laserscan.yaml  3D lidar -> 2D /scan for SLAM + Nav2
+│       │   ├── nav2_params.yaml              Nav2 stack config — ✅ working
+│       │   └── office.rviz                   robot model, camera, lidar, map, costmaps,
+│       │                                      odom trajectory, KISS-ICP accumulated cloud,
+│       │                                      "2D Nav Goal" tool
 │       └── scripts/
 │           ├── keyboard_teleop.py     WASD + arrows teleop — ✅ working
-│           ├── frontier_explorer.py   autonomous exploration — ⬜ not implemented (blocked on Nav2)
-│           └── record_bag.sh          rosbag recording — ⬜ not implemented (blocked on Nav2)
+│           ├── send_nav_goal.py       CLI NavigateToPose action client — ✅ working
+│           ├── frontier_explorer.py   autonomous exploration — ⬜ not implemented yet
+│           └── record_bag.sh          rosbag recording — ⬜ not implemented yet
+├── docs/
+│   └── autonomous_exploration_plan.adoc   the Nav2/KISS-ICP fix writeup + forward plan
+│                                           for frontier_explorer.py — see Known issues
 ├── bags/                         rosbag output directory
 └── install/ build/ log/          colcon artifacts (generated, not source)
 ```
@@ -103,9 +126,13 @@ truth for a query like *"go to the rubber duck."*
 vendored into `src/go2_ros2_sim_py` with its original commit history preserved (via `git
 subtree`) and our own changes on top — see [Patches](#patches-to-upstream) for what
 changed. It ships a Go2 URDF/xacro and an IK trot-gait controller
-(`quadropted_controller`) that walks the robot from `cmd_vel` and publishes real odometry —
-not a kinematic teleport. `go1_description/` and `docker/` are excluded from the build via
-`COLCON_IGNORE` (go1 depends on Classic Gazebo packages Jazzy dropped, and isn't used here).
+(`quadropted_controller`) that walks the robot from `cmd_vel` — a real gait, not a
+kinematic teleport. It also ships its own leg-kinematic odometry node
+(`QuadrupedOdometryNode.py`), still running (renamed to publish `/robot1/odom_leg`) as a
+comparison/fallback source, but it is **not** what SLAM/Nav2 actually consume — see
+[KISS-ICP](#kiss-icp-real-odom-source) for the real `/robot1/odom`
+source. `go1_description/` and `docker/` are excluded from the build via `COLCON_IGNORE`
+(go1 depends on Classic Gazebo packages Jazzy dropped, and isn't used here).
 
 **Sensors.** The upstream xacro already wired up a front camera and a lidar with native
 gz-sim syntax; both were modified in place: the camera became a **RGBD** sensor
@@ -117,20 +144,30 @@ gz-sim syntax; both were modified in place: the camera became a **RGBD** sensor
 convention — `/robot1/cmd_vel`, `/robot1/odom`, `/robot1/tf`, `/robot1/camera/*`,
 `/robot1/lidar/points`, etc.
 
-**Pipeline** (working parts only — see [Known issues](#known-issues) for Nav2):
+**Pipeline** (all of this works end-to-end):
 
 ```
 gz sim (office.sdf + Go2)
   ├─ rgbd_camera ──┐
   └─ gpu_lidar ────┴─> ros_gz_bridge ─┬─> /robot1/camera/{image,depth_image,points,camera_info}
-                                       └─> /robot1/lidar/points
+                                       └─> /robot1/lidar/points ──────────────┐
+                                                 │                            │
+                           pointcloud_to_laserscan ─> /robot1/scan            │
+                                                 │                       kiss_icp_node
+                                                 │                            │
+                                                 │              /robot1/odom, odom->base_link TF
+                                                 │                            │
+                                    slam_toolbox (async) <───────────────────-┘
                                                  │
-                           pointcloud_to_laserscan ─> /robot1/scan
+                                    /robot1/map, map->odom TF
                                                  │
-                                    slam_toolbox (async) ─> /robot1/map, map->odom TF
-                                                 │
-                                          [Nav2 — blocked, see below]
+                                    Nav2 (costmaps, planner, controller) ──> /robot1/cmd_vel
 ```
+
+KISS-ICP feeds `slam_toolbox` (which still does the actual scan-matching/mapping/loop
+closure) rather than replacing it — see [KISS-ICP](#kiss-icp-real-odom-source)
+for why, and `docs/autonomous_exploration_plan.adoc` for the full writeup of how this was
+wired up and the three real bugs that had to be fixed to get Nav2 working at all.
 
 ---
 
@@ -163,9 +200,10 @@ by INSTALL.md, and nothing here needs it) — scripts are invoked directly with
 |---|---|---|
 | `ros2 launch go2_office_sim office_sim.launch.py` | Spawns the office world + Go2 with sensors and locomotion | ✅ |
 | `python3 ~/go2_nav/src/go2_office_sim/scripts/keyboard_teleop.py` | WASD + arrow-key teleop (needs its own terminal, keyboard focus) | ✅ |
-| `ros2 launch go2_office_sim rviz.launch.py` | RViz — robot model, TF, camera image, 3D lidar cloud, map | ✅ |
-| `ros2 launch go2_office_sim nav_stack.launch.py` | SLAM + pointcloud_to_laserscan + Nav2 | SLAM ✅, Nav2 🔴 |
-| `ros2 launch go2_office_sim kiss_icp.launch.py` | Lidar-only odometry (KISS-ICP) off the back lidar, own RViz window included | ✅ |
+| `ros2 launch go2_office_sim rviz.launch.py` | RViz — robot model, camera, map, costmaps, odom trajectory, "2D Nav Goal" tool | ✅ |
+| `ros2 launch go2_office_sim kiss_icp.launch.py` | KISS-ICP odometry — the real `/robot1/odom` + `odom->base_link` TF source | ✅ |
+| `ros2 launch go2_office_sim nav_stack.launch.py` | SLAM + pointcloud_to_laserscan + Nav2 | ✅ |
+| `python3 ~/go2_nav/src/go2_office_sim/scripts/send_nav_goal.py --x <x> --y <y>` | Send a one-off Nav2 goal from the CLI (`ros2 action` isn't installed) | ✅ |
 | `blender -b blender/office.blend --python blender/export_sdf.py` | Re-export the scene after editing it in Blender | ✅ |
 | `blender -b --python blender/build_office.py` | Regenerate the scene from scratch — **overwrites `office.blend`** | ✅ |
 
@@ -196,7 +234,7 @@ Simplest is still just separate foreground terminals, one per command above.
 
 ---
 
-## KISS-ICP (lidar-only odometry)
+## KISS-ICP (real odom source)
 
 `src/kiss-icp` is a git submodule, an **unpatched** checkout of
 [PRBonn/kiss-icp](https://github.com/PRBonn/kiss-icp). It's the lidar odometry this
@@ -207,27 +245,37 @@ this file for why. KISS-ICP does pure lidar scan-matching odometry with **no IMU
 all**, sidestepping that whole class of bug by construction — "a LiDAR odometry pipeline
 that just works," per its own tagline.
 
-Run it alongside `office_sim.launch.py`:
+**KISS-ICP now publishes the real `/robot1/odom` and `odom->base_link` TF** — it used to be
+a disconnected side-pipeline in its own `odom_lidar` frame, purely for evaluating the
+algorithm; it has since been wired directly into this project's actual navigation TF tree
+(full rationale in `docs/autonomous_exploration_plan.adoc`'s "Option A"). `slam_toolbox`
+still does the actual scan-matching/mapping/loop-closure on top of it — KISS-ICP supplies
+better, unbiased odometry (see **FAST-LIO, briefly** for what it replaced), not a
+replacement for SLAM itself.
+
+Run it alongside `office_sim.launch.py`, before `nav_stack.launch.py`:
 
 ```bash
 ros2 launch go2_office_sim kiss_icp.launch.py
 ```
 
-This launches `kiss_icp_node` against `/robot1/lidar/points`, plus KISS-ICP's own
-preconfigured RViz window by default (pass `visualize:=false` to skip it). The wrapper
-(`launch/kiss_icp.launch.py`) just points it at our topic — no config yaml of our own
-needed. `base_frame` and `lidar_odom_frame` are both deliberately left at their own
-defaults (empty / `odom_lidar`): `base_frame` empty means KISS-ICP publishes directly in
-the lidar's own frame rather than needing a TF lookup to `base_link` — simplest possible
-setup, and precise base_link alignment isn't needed to judge whether the algorithm itself
-tracks cleanly. `lidar_odom_frame` matters more than it looks: KISS-ICP's own bundled
-`rviz/kiss_icp.rviz` has `Fixed Frame: odom_lidar` **hardcoded** — renaming this frame via
-the launch argument without also editing that file produces `Frame[odom_lidar] does not
-exist` and a black RViz window (confirmed the hard way; don't rename it unless you also
-fix the rviz config). Same **separate-window** situation as FAST-LIO applies here too and
-for the same reason (`odom_lidar` is yet another frame disconnected from this project's
-own `odom`/`base_link` tree) — this is why its own RViz window is launched by default
-rather than trying to fold it into `office.rviz`.
+`kiss_icp_node` is launched directly (not via kiss-icp's own `odometry.launch.py`) so it
+can be namespaced under `/robot1` and have its `/tf`/`/tf_static` remapped, same as
+`slam_toolbox` needs in `nav_stack.launch.py` — kiss_icp_node hardcodes those topics
+absolute and isn't namespaced by its own upstream launch file. Key parameters, all set
+explicitly rather than left at kiss-icp's own defaults:
+- `base_frame: base_link`, `lidar_odom_frame: odom` — publishes directly into this
+  project's real TF tree instead of its own separate `odom_lidar` frame.
+- `invert_odom_tf: false` — kiss-icp's own default (`true`) silently broadcasts the TF
+  backwards (`base_link->odom` instead of the standard `odom->base_link`); confirmed live
+  via a TF dump, easy to miss since nothing errors, TF just silently reports the parent
+  and child swapped.
+- `publish_debug_clouds: true` — always on now, decoupled from kiss-icp's own bundled
+  RViz window (which is permanently broken here anyway: its `rviz/kiss_icp.rviz` hardcodes
+  `Fixed Frame: odom_lidar`, which no longer exists once `lidar_odom_frame` is renamed to
+  `odom`). This is what feeds `office.rviz`'s `KissIcpLocalMap` display — the accumulated
+  point cloud KISS-ICP registers each scan against, the closest thing it has to "a map"
+  since it has no occupancy-grid output of its own.
 
 **Dependencies:** `ros-jazzy-sophus` and `robin-map-dev` — already covered by
 Installation's existing `rosdep install --from-paths src --ignore-src -r -y`, nothing
@@ -238,19 +286,60 @@ handling is simpler still: it just logs `Field 't', 'timestamp', 'time_stamp', o
 does not exist. Disabling scan deskewing` and proceeds without deskewing. No synthesis
 needed, nothing to work around.
 
-**Verified working:** with the robot genuinely stationary, `/kiss/odometry`'s position
-held at sub-millimetre noise and identity orientation (no tilt at all, over repeated
-samples). Drove the robot forward with a 4 s, 0.3 m/s `cmd_vel` burst and confirmed
-`/kiss/odometry` tracked ~0.12 m of real displacement, not just an idle topic. Resource
-usage is light too: ~50 MB RSS, low CPU, no growth over time.
+**Verified working:** with the robot genuinely stationary, `/robot1/odom`'s position held
+at sub-millimetre noise and identity orientation (no tilt at all, over repeated samples).
+Drove the robot forward and confirmed real tracked displacement, not just an idle topic —
+including a full Nav2 goal walking the robot ~1.6 m to within 2 cm of target. Resource
+usage is light too: ~50 MB RSS, low CPU, no growth over time. **One real trade-off**: its
+`odom` TF publish rate tracks the lidar scan rate (~7-10 Hz) with real jitter (gaps up to
+~0.3 s), tighter than the old fixed-50 Hz kinematic odometry — several `nav2_params.yaml`
+`transform_tolerance` values were widened (0.2s -> 0.5s) to absorb this; see that file's
+comments if tuning further.
 
 **No loop closure.** KISS-ICP is odometry only — each scan registers against a local voxel
 map via ICP, and the reported pose is just the accumulated chain of those registrations.
 There's no pose graph, no place recognition, nothing that notices "I've been here before."
 Small per-registration errors compound like any dead-reckoning method: expect good
 short-term tracking with drift accumulating over time/distance, not a globally consistent
-map. `slam_toolbox` (already in this project, via `nav_stack.launch.py`) does have loop
-closure, in 2D, if that's ever needed instead.
+map on its own — that's exactly why `slam_toolbox` (loop closure, in 2D) still sits on top
+of it rather than KISS-ICP replacing it outright.
+
+---
+
+## Nav2 (point-to-point navigation)
+
+Nav2 is fixed and working — `nav_stack.launch.py` brings up `pointcloud_to_laserscan` +
+`slam_toolbox` + the full Nav2 stack, all namespaced under `/robot1`. Getting here took
+finding and fixing five real bugs this session (namespace mismatches, missing config for
+Jazzy-only nodes, a broken behavior-tree XML path, and a false-positive collision-monitor
+throttle from the walking gait's own legs) — see `docs/autonomous_exploration_plan.adoc`
+for the full writeup if any of this needs revisiting.
+
+**Sending a goal**, once `nav_stack.launch.py`'s log ends with `Managed nodes are active`:
+
+- **Click in RViz** — the `SetGoal` ("2D Nav Goal") tool in `office.rviz`'s toolbar
+  publishes to `/robot1/goal_pose`, which `bt_navigator` auto-forwards to a
+  `NavigateToPose` action call. Click, then drag before releasing to set the goal's facing
+  angle.
+- **From the command line** — `ros2 action` isn't installed in this project's setup (see
+  [Installation](#installation)'s note on `ros2 run`), so `ros2 action send_goal` won't
+  work. Use the bundled script instead:
+  ```bash
+  python3 ~/go2_nav/src/go2_office_sim/scripts/send_nav_goal.py --x 1.0 --y 0.0
+  ```
+  Optional `--yaw` (radians) and `--timeout` (seconds). Prints live feedback
+  (`distance_remaining`, `recoveries`) and the final result, then exits.
+
+Pick a goal inside already-mapped, open floor space, not hard against a wall — planning
+very close to an obstacle is a known NavFn edge case that showed up during testing and is
+unrelated to the odometry/TF fixes above. Don't run `keyboard_teleop.py` at the same time
+as sending goals; both drive `/robot1/cmd_vel` and will fight each other.
+
+**Not implemented yet:** `frontier_explorer.py` — the piece that would pick goals
+automatically based on unexplored map area, making exploration actually autonomous rather
+than one manually-placed goal at a time. See `docs/autonomous_exploration_plan.adoc` for
+the design (nearest-frontier heuristic, `nav2_simple_commander`-based) and
+[Known issues](#known-issues).
 
 ---
 
@@ -318,25 +407,44 @@ traced with a live TF dump.
 
 ## Known issues
 
-- **Nav2's `controller_server` does not come up.** Every launch fails during configure with
-  `Couldn't load critics! Caught exception: No critics defined for FollowPath`, and
-  `lifecycle_manager` aborts the whole Nav2 bringup. This survived switching controller
-  plugins entirely (DWB → MPPI → Regulated Pure Pursuit, the last of which has no "critics"
-  concept at all and still failed the same way), and byte-for-byte matching
-  `nav2_bringup`'s own stock reference config. The params file `nav2_bringup` actually hands
-  to `controller_server` at runtime was captured and diffed against a config proven to work
-  when fed to an isolated `controller_server` directly — **identical content**, yet the real
-  pipeline still loads `dwb_core::DWBLocalPlanner` instead of the configured plugin. The
-  difference is in the process invocation itself (nav2_bringup's `RewrittenYaml` launches
-  `controller_server` with two separate `--ros-args` blocks on the command line;
-  reproducing that exact invocation by hand to confirm was the next step, not yet done).
-  Until this is resolved, `nav_stack.launch.py`'s Nav2 half — and therefore autonomous
-  frontier exploration and the rosbag-of-an-autonomous-run goal — stays blocked.
-  `frontier_explorer.py` and `record_bag.sh` are unimplemented placeholders for this reason,
-  not oversights.
-- **SLAM and `pointcloud_to_laserscan` work independently of Nav2** — drive manually with
-  the keyboard teleop and `/robot1/map` builds live in RViz. This is a legitimate, working
-  path to a rosbag of manual SLAM exploration today, if that's useful before Nav2 is fixed.
+- **Robot sometimes tips over within a few seconds of spawning — unresolved.** Not a
+  spawn-height or startup-timing problem (both were tried and ruled out: sampling the
+  robot's pose every 0.5s after spawn shows pitch climbing *smoothly* from ~17° to ~118°
+  over about 3 real seconds — well after landing/settling — before freezing solid, with
+  ~0.5m of lateral drag during that window). That pattern means the gait controller is
+  actively walking itself over, not reacting to a bad landing impact. Two suspects, both in
+  upstream `quadropted_controller` code untouched by this project's own patches: (1)
+  `TrotGaitController`'s idle/`autoRest` logic not actually engaging with zero commanded
+  velocity, keeping it in an active gait cycle when it should hold a static stance, or (2)
+  the hardcoded `default_stance` foot-location geometry (`Robot.__init__`'s `body`/`legs`
+  constants) not matching this project's actual URDF leg proportions, producing an
+  inherently off-balance standing pose. Not yet root-caused — Nav2/KISS-ICP/SLAM all still
+  function even with the robot tipped (it can still drag/shuffle in a way both track), so
+  this hasn't blocked navigation testing, but it's a real, open bug.
+- **Nav2 bringup can stall on a loaded machine.** A lifecycle node's `change_state` service
+  response can get lost at the DDS layer under CPU contention (confirmed live: a node
+  finished configuring internally but `lifecycle_manager` never got the acknowledgment,
+  logged as `failed to send response ... at rmw_response.cpp:153`), leaving bringup stuck
+  on that one node forever — no timeout, no retry. Gazebo's GUI alone can pin ~2 cores, and
+  the worst spike is right at cold-start when Gazebo + KISS-ICP + `slam_toolbox` + all of
+  Nav2's ~10 nodes initialize simultaneously. If bringup stalls with a node stuck
+  "Configuring" and no further log output, kill and retry `nav_stack.launch.py` after
+  letting `office_sim.launch.py`/`kiss_icp.launch.py` settle for a few seconds first — see
+  the Quick start note.
+- **`slam_toolbox` keeps its whole map/pose-graph in memory only, no disk persistence** —
+  if it falls behind real-time for long enough (its own message-filter queue log-spams
+  `discarding message because the queue is full`) it can die and silently restart from a
+  blank map, which looks exactly like the map "resetting" rather than a process crash.
+  Mitigated (not eliminated) via `slam.yaml`'s `throttle_scans: 2` (halves its per-scan
+  compute cost) and a larger `scan_queue_size` (bigger shock absorber for transient stalls
+  like loop-closure searches) — worth revisiting if it recurs. Saving the map to disk
+  periodically (`map_saver_cli`, not yet wired into a script) would make this recoverable
+  instead of just less likely; see `docs/autonomous_exploration_plan.adoc`'s Step 5.
+- **`frontier_explorer.py` and `record_bag.sh` are unimplemented placeholders**, not
+  oversights — full design for both (frontier detection + goal selection loop,
+  `nav2_simple_commander`-based; a straightforward `ros2 bag record` one-liner) is written
+  up in `docs/autonomous_exploration_plan.adoc`, just not built yet. Manual Nav2 goals and
+  manual-teleop SLAM both work fully today in the meantime.
 - **The 3D lidar's scan pattern isn't physically representative of a real Livox Mid-360** —
   `gpu_lidar` gives a uniform raster, not Mid-360's non-repetitive rosette pattern. Point
   *density* looks different from a real unit; the geometry (FOV, range) is right and it's

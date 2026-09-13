@@ -1,4 +1,15 @@
-slam_toolbox:
+# /** (not a bare "slam_toolbox:" key): ROS 2's parameter-YAML matching
+# requires the top-level key to be exactly "/**", "/<ns>/**", or the node's
+# full fully-qualified name -- a bare, non-slash-prefixed key never matches a
+# namespaced node at all. Confirmed live: with the old bare key, EVERY param
+# below was silently ignored (`ros2 param get /robot1/slam_toolbox base_frame`
+# read back slam_toolbox's own compiled-in default "base_footprint", not this
+# file's "base_link"), which is why map->odom TF never appeared -- slam_toolbox
+# was trying to track a base_footprint frame that doesn't exist anywhere in
+# this URDF. This is the same class of bug as nav_stack.launch.py's Nav2
+# namespace fix, just hitting a params file directly instead of via
+# nav2_bringup's RewrittenYaml wrapper.
+/**:
   ros__parameters:
     use_sim_time: true
     solver_plugin: solver_plugins::CeresSolver
@@ -14,7 +25,14 @@ slam_toolbox:
     odom_frame: odom
     map_frame: map
     base_frame: base_link
-    scan_topic: /robot1/scan
+    # relative, NOT /robot1/scan: slam_toolbox's own topic resolution strips a
+    # leading segment matching its own namespace before re-resolving, so an
+    # absolute "/robot1/scan" here collapses to bare "/scan" at the root
+    # namespace (confirmed live via `ros2 node info /robot1/slam_toolbox` --
+    # it was subscribed to /scan, not /robot1/scan, while everything else
+    # correctly listens on /robot1/scan). A relative name resolves normally
+    # under the namespace PushRosNamespace already applies in nav_stack.launch.py.
+    scan_topic: scan
 
     mode: mapping
     map_update_interval: 2.0
@@ -22,8 +40,28 @@ slam_toolbox:
     max_laser_range: 25.0
     min_laser_range: 0.15
     transform_publish_period: 0.02
-    transform_timeout: 0.3
+    transform_timeout: 0.5  # was 0.3 -- see collision_monitor's comment in
+    # nav2_params.yaml: KISS-ICP's odom TF has more jitter than the old fixed-
+    # rate kinematic odometry did.
     tf_buffer_duration: 30.0
+
+    # throttle_scans + scan_queue_size added after a real crash this session:
+    # slam_toolbox fell behind real-time on this 8-core machine (Gazebo's GUI
+    # alone uses ~2 cores) as the pose graph grew -- confirmed via its own log
+    # spamming "Message Filter dropping message: ... discarding message
+    # because the queue is full" continuously for 4+ minutes before the whole
+    # node died. slam_toolbox keeps its entire map/pose-graph in memory only
+    # (no disk persistence), so that crash silently wiped the whole
+    # accumulated map on restart -- this looked like the map "suddenly
+    # resetting" but was actually a full process death.  `throttle_scans: 2`
+    # halves the per-scan processing cost (matching scans at ~9-10Hz lidar
+    # input still gives ~4-5Hz effective mapping rate, plenty for a slow-
+    # walking gait) so average load stays below real-time instead of
+    # accumulating an ever-growing backlog; `scan_queue_size` gives a bigger
+    # shock absorber for the transient stalls (e.g. loop-closure searches)
+    # that will still happen even with throttling.
+    throttle_scans: 2
+    scan_queue_size: 20
 
     minimum_travel_distance: 0.2
     minimum_travel_heading: 0.2

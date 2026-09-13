@@ -12,7 +12,24 @@
     angle_max: 3.14159
     angle_increment: 0.00349066  # 0.2 deg -> 1800 bins, well under the 900 azimuth samples
     scan_time: 0.1
-    range_min: 0.15
+    # 0.5, not 0.15: this is the real fix for Nav2's "invisible obstacles" --
+    # the walking gait's own front legs swing close enough to the
+    # back-mounted lidar to register as scan points (confirmed earlier this
+    # session: a persistent ~0.46m reading with the robot standing still near
+    # a spawn point designed for >=1.0m clearance, i.e. nothing real was that
+    # close). Those self-hit points feed straight into slam_toolbox AND both
+    # Nav2 costmaps (local_costmap's voxel_layer, global_costmap's
+    # obstacle_layer) as if they were real obstacles, appearing and
+    # disappearing as the legs swing -- that's the "invisible obstacles"
+    # behavior, and it's also very likely what's forcing the excessive
+    # spinning: phantom obstacles trigger costmap changes and progress-check
+    # failures, causing frequent replanning (RegulatedPurePursuit rotates in
+    # place on any new plan with a large-enough heading change) and recovery
+    # behavior's own "Spin" action kicking in when navigation stalls. 0.5m
+    # clears that ~0.46m self-hit distance with margin while still detecting
+    # any real obstacle beyond it -- local_costmap's own 0.40m inflation
+    # radius already covers the remaining close-in gap for genuine hazards.
+    range_min: 0.5
     range_max: 25.0
     use_inf: true
     concurrency_level: 1

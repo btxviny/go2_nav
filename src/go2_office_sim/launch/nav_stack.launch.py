@@ -48,9 +48,27 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
         }.items())
     # online_async_launch.py doesn't take a namespace arg; push one on instead
-    from launch_ros.actions import PushRosNamespace
+    from launch_ros.actions import PushRosNamespace, SetRemap
     from launch.actions import GroupAction
-    slam_namespaced = GroupAction([PushRosNamespace(namespace), slam])
+    # slam_toolbox itself hardcodes its map/map_metadata/tf publishers to
+    # absolute topics in its own C++ source (confirmed live: `ros2 node info
+    # /robot1/slam_toolbox` lists `/map`, not a namespace-relative `map`) --
+    # PushRosNamespace alone can't touch an already-absolute topic string, so
+    # without these SetRemaps slam_toolbox silently publishes at the root
+    # namespace while everything downstream (global_costmap's static_layer,
+    # this project's own remaps elsewhere e.g. rviz.launch.py) is listening
+    # on /robot1/map and /robot1/tf -- global_costmap then never sees a map,
+    # never gets a map->odom TF, and the planner hangs waiting on the `map`
+    # frame forever. SetRemap is the standard launch_ros way to redirect a
+    # hardcoded-absolute topic inside an included launch file we don't own.
+    slam_namespaced = GroupAction([
+        PushRosNamespace(namespace),
+        SetRemap('/tf', 'tf'),
+        SetRemap('/tf_static', 'tf_static'),
+        SetRemap('/map', 'map'),
+        SetRemap('/map_metadata', 'map_metadata'),
+        slam,
+    ])
 
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
@@ -63,10 +81,18 @@ def generate_launch_description():
             'autostart': 'true',
             'map_subscribe_transient_local': 'true',
         }.items())
+    # navigation_launch.py never pushes a ROS namespace itself (normally
+    # bringup_launch.py's job, which we bypass) -- without this wrapper every
+    # Nav2 node runs at the root namespace while RewrittenYaml hands it
+    # params keyed for /robot1/<node>, so nothing ever matches and every node
+    # silently falls back to its internal defaults (this is the real cause of
+    # the old "Couldn't load critics! No critics defined for FollowPath"
+    # failure, not the bare-vs-fully-qualified-key theory in nav2_params.yaml).
+    nav2_namespaced = GroupAction([PushRosNamespace(namespace), nav2])
 
     return LaunchDescription([
         declare_use_sim_time,
         pointcloud_to_laserscan,
         slam_namespaced,
-        nav2,
+        nav2_namespaced,
     ])

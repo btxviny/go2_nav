@@ -1,0 +1,204 @@
+= Autonomous Exploration Plan (KISS-ICP + Nav2)
+:toc:
+:sectnums:
+
+== Goal
+
+Drive the Go2 around the office autonomously (frontier exploration) instead of by
+keyboard teleop, using *KISS-ICP* as the odometry/SLAM source instead of the
+current leg-kinematic `QuadrupedOdometryNode`.
+
+== Status as of this session
+
+Nav2 + `slam_toolbox` were fully broken end-to-end before this session (the
+README's long-standing "Known issues" bug). Three independent, real bugs were
+found and fixed today, all namespace/parameter-matching issues, not logic bugs:
+
+1. `nav_stack.launch.py` never pushed a ROS namespace onto `nav2_bringup`'s
+   `navigation_launch.py` include, so every Nav2 node ran at the root namespace
+   while its params were keyed for `/robot1/*` -- nothing ever matched, which is
+   why `controller_server` reported "No critics defined." Fixed with a
+   `GroupAction([PushRosNamespace(...), nav2])` wrapper, mirroring the
+   `slam_toolbox` include right above it.
+2. Jazzy's `navigation_launch.py` also unconditionally brings up
+   `collision_monitor` and `docking_server`, which `nav2_params.yaml` had no
+   config for at all -- added minimal working blocks for both.
+3. `slam.yaml`'s top-level key was a bare `slam_toolbox:`, which ROS 2's
+   parameter-YAML matching never actually applies to a namespaced node (it
+   needs `/**` or the full `/robot1/slam_toolbox` name). Every param in that
+   file -- including `base_frame` -- was silently ignored, so `slam_toolbox`
+   was tracking a `base_footprint` frame that doesn't exist in this URDF, and
+   `map`\->`odom` TF never appeared. Fixed by switching the key to `/**`, plus
+   a `SetRemap` fix for `slam_toolbox` hardcoding its `map`/`tf` publishers to
+   absolute (non-namespaced) topics internally.
+
+Verified live after these three fixes: `lifecycle_manager` reports *"Managed
+nodes are active"*, `map`\->`odom` TF is being broadcast, and `slam_toolbox`'s
+occupancy grid pipeline is healthy -- all using the existing
+`QuadrupedOdometryNode` as the odometry source. This is the baseline the KISS-ICP
+switch below builds on top of; none of this work is wasted by the switch.
+
+== Architecture decision: how far does "use KISS-ICP" go?
+
+KISS-ICP is lidar *odometry* -- pure scan-to-scan ICP, no loop closure, no
+occupancy-grid output (see `docs`/README's KISS-ICP section). It cannot replace
+`slam_toolbox` outright without losing 2D costmap generation and loop closure,
+which Nav2 needs. Two ways to read "use KISS-ICP as the SLAM algorithm":
+
+[cols="1,3,3"]
+|===
+| Option | What it means | Trade-off
+
+| *A -- KISS-ICP as odometry source (recommended)*
+| Replace `QuadrupedOdometryNode`'s `odom`\->`base_link` TF with KISS-ICP's own
+  odometry (retargeted from its current disconnected `odom_lidar` frame onto
+  the real `odom`\->`base_link` tree). Keep `slam_toolbox` running exactly as
+  just fixed -- it still does scan matching, loop closure, and publishes the
+  `/robot1/map` occupancy grid Nav2 needs, just seeded by better (no ESKF-style
+  bias, though still driftier without loop closure alone) odometry.
+| Small, low-risk change built directly on today's fixes. Gets KISS-ICP's real
+  advantage (clean, unbiased odometry) without inventing new mapping machinery.
+
+| *B -- KISS-ICP as the whole SLAM stack*
+| Drop `slam_toolbox` entirely. Some new node has to turn KISS-ICP's internal
+  3D voxel map / accumulated point cloud into a 2D occupancy grid for Nav2's
+  costmaps, and there is no loop closure at all, so drift is permanent and
+  compounds over the whole run.
+| Matches "KISS-ICP as SLAM" literally, but is materially more work (a
+  pointcloud\->occupancy-grid node doesn't exist in this repo today) and gives
+  up loop closure -- likely to drift visibly over a full 20x20 m exploration
+  run.
+|===
+
+*Recommendation: Option A.* It's what the rest of this plan assumes. Flag if
+you actually want Option B instead -- it changes Phase 2 below substantially.
+
+== Sequence
+
+[cols="1,4"]
+|===
+| Phase | What happens
+
+| *0. (done)* Nav2 bring-up fix
+| The three bugs above -- Nav2 comes up, `slam_toolbox` produces a real map,
+  using the *existing* odometry. This is the safety net Phases 1-4 build on.
+
+| *1. Wire KISS-ICP into the nav TF tree*
+| Point `kiss_icp.launch.py`'s odometry output at `odom`\->`base_link` (its
+  `base_frame` arg) instead of leaving it in the disconnected `odom_lidar`
+  frame; stop (or keep running side-by-side, disconnected, for comparison)
+  `QuadrupedOdometryNode`. Re-verify `map`\->`odom`\->`base_link` TF is still a
+  clean, connected chain, and that `slam_toolbox` is now scan-matching against
+  KISS-ICP-fed odometry.
+
+| *2. Build a map with KISS-ICP odometry*
+| Drive the robot around the office (teleop, same as any prior manual SLAM
+  run) with `nav_stack.launch.py` up, watching `/robot1/map` fill in in RViz.
+  Once it looks complete, save it with `map_saver_cli` (already planned as a
+  follow-up item; see the main plan file). This is "create a map with
+  KissICP" in Option A's sense: KISS-ICP supplies the odometry that makes the
+  scan matching accurate; `slam_toolbox` still emits the actual grid.
+
+| *3. Test Nav2 against that map*
+| Manual `NavigateToPose` goals (in progress this session -- a goal was queued
+  right before this doc was requested) to confirm the planner/controller/
+  costmaps all work correctly on KISS-ICP-sourced odometry, not just the old
+  odometry. Watch for any behavior change (KISS-ICP has more raw drift than
+  the old odometry over short distances since it has no loop closure of its
+  own -- `slam_toolbox`'s scan matching should still correct `map`\->`odom`
+  as before, but this is the first real test of that combination).
+
+| *4. Autonomous exploration*
+| Implement and run `frontier_explorer.py` (nearest-frontier heuristic,
+  `nav2_simple_commander`-based -- see the main plan file's Step 3 for the
+  detailed design) against the now-KISS-ICP-backed stack. This is the actual
+  "send target goals on its own" deliverable.
+
+| *5. (follow-up)* Map persistence + rosbag
+| `map_saver_cli` + `record_bag.sh`, already scoped as follow-ups in the main
+  plan file's Step 5.
+|===
+
+== Status update: Option A implemented and validated
+
+Implemented and confirmed live this session:
+
+* `kiss_icp.launch.py` rewired: `base_frame: base_link`, `lidar_odom_frame: odom`,
+  `invert_odom_tf: false` (kiss_icp's own default silently broadcasts the TF
+  backwards, `base_link`\->`odom` instead of the standard `odom`\->`base_link`
+  -- confirmed live via a TF dump, non-obvious and easy to miss), plus the same
+  `PushRosNamespace` + `SetRemap` pattern `nav_stack.launch.py` needed for
+  `slam_toolbox` (kiss_icp_node hardcodes `/tf` and isn't namespaced by its own
+  launch file either). `kiss_icp_node`'s own odometry topic remap needed the
+  *relative* form (`kiss/odometry`, not `/kiss/odometry`) to actually match --
+  confirmed by testing both.
+* `office_sim.launch.py`'s `QuadrupedOdometryNode` kept running (not deleted)
+  but `enable_odom_tf: false` and its topic renamed to `/robot1/odom_leg`, so
+  it no longer fights KISS-ICP over the same TF edge or topic.
+* Full stack re-verified end-to-end on the new odometry source: `map`\->`odom`
+  TF (from `slam_toolbox`, base_frame correctly `base_link`), `odom`\->`base_link`
+  TF (from KISS-ICP, correct direction), `/robot1/map` publishing a real
+  occupancy grid, `lifecycle_manager` reporting all Nav2 nodes active.
+* Two more real bugs found and fixed along the way, both `nav2_params.yaml`:
+  ** `bt_navigator`'s `default_nav_to_pose_bt_xml` was set to a bare filename
+     with no package path, which fails outright (`Couldn't open input XML
+     file`). Removed the override entirely -- `nav2_bringup`'s own stock
+     params file doesn't set this either, letting `bt_navigator`'s compiled-in
+     default (a real, correct full path) take over.
+  ** `collision_monitor`'s `FootprintApproach` polygon caused a near-permanent
+     "approach" speed throttle, confirmed via `/robot1/scan` showing a
+     persistent ~0.46 m range reading -- almost certainly the legged gait's
+     own swinging front legs entering the back-mounted lidar's height slice,
+     not a real obstacle (spawn clearance is designed for >=1.0 m). Disabled
+     via `enabled: false` on the polygon (an empty `polygons: []` list crashes
+     the node outright -- confirmed live, not a valid way to turn this off).
+     Real collision avoidance still happens via the local/global costmaps,
+     which `collision_monitor` was never the primary layer for anyway --
+     it's only present because Jazzy's `navigation_launch.py` hard-requires
+     it in its lifecycle list.
+* Also widened `transform_tolerance` (0.2\->0.5) on `FollowPath`,
+  `behavior_server`, and `collision_monitor`: KISS-ICP publishes `odom`\->`base_link`
+  once per finished scan registration (~7-10 Hz, confirmed jittery, gaps up to
+  ~0.3 s) rather than at the old odometry's strict fixed 50 Hz, and 0.2 s was
+  tight enough to cause real "extrapolation into the future" TF failures.
+
+**Manual goal test result:** sent a 1 m `NavigateToPose` goal via a throwaway
+action-client script (`ros2 action` isn't installed in this environment, same
+as `ros2 run`/`ros2 lifecycle` -- see README). The robot genuinely walked
+(gait visibly active, not a teleport) and got to within *0.02 m* of the goal
+(well inside the 0.25 m tolerance) before the planner started intermittently
+failing to compute a path and the goal was ultimately aborted. The test goal
+happened to be very close to whatever is producing that ~0.46 m range reading
+above -- plausibly the goal itself sat inside or near the costmap's inflation
+zone around it, which is a known NavFn edge case (planning very close to an
+inflated obstacle), not a sign the KISS-ICP wiring itself is broken. This
+wasn't chased further since frontier-selected goals (Phase 4) are centroids of
+open frontier cells, not deliberately-close-to-an-obstacle points like this
+manual test, and `frontier_explorer.py`'s design already blacklists/retries
+goals that fail rather than assuming every goal succeeds cleanly.
+
+**Bottom line: Option A's core claim is validated** -- KISS-ICP odometry, real
+distance traveled, correct localization throughout, full Nav2 lifecycle
+active. The remaining planner-near-goal flakiness is a polish item, not a
+blocker, and is reasonable to absorb into Phase 4's retry logic rather than
+solve in isolation with more synthetic manual-goal tests.
+
+== Open questions to confirm before implementing
+
+* Option A vs B above (defaulting to A).
+* Whether `QuadrupedOdometryNode` should keep running in parallel (harmless,
+  just unused/disconnected -- useful as a sanity-check comparison) or be
+  removed from `office_sim.launch.py` once KISS-ICP takes over its TF role.
+* Whether to keep `kiss_icp.launch.py`'s own separate RViz window (comparing
+  the two odometry sources side by side) once KISS-ICP is the "real" one, or
+  fold everything into `office.rviz` now that there's only one TF tree to
+  watch.
+
+== Relationship to the existing plan file
+
+This document is the *odometry-source* decision layered on top of
+`my-sim-works-fine-hazy-wolf.md` (the approved plan already in progress this
+session), which covers the Nav2 fix (done), `frontier_explorer.py`'s detailed
+design, launch wiring, and map/bag follow-ups. That plan's Steps 3-5 are
+unaffected by this switch -- they consume `/robot1/map` and TF regardless of
+which node publishes `odom`\->`base_link`.

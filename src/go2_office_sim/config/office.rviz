@@ -8,13 +8,20 @@ Visualization Manager:
   Tools:
     - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Value: /robot1/goal_pose
+      # bt_navigator (nav_stack.launch.py, now namespaced under /robot1) has
+      # a built-in "goal_pose" topic subscription that auto-forwards to a
+      # NavigateToPose action call -- this is the standard way "2D Nav Goal"
+      # works with Nav2, no nav2-specific rviz plugin needed.
   Displays:
     - Class: rviz_default_plugins/Grid
       Name: Grid
       Enabled: true
     - Class: rviz_default_plugins/TF
       Name: TF
-      Enabled: true
+      Enabled: false
       Show Names: true
     - Class: rviz_default_plugins/RobotModel
       Name: RobotModel
@@ -24,9 +31,61 @@ Visualization Manager:
       TF Prefix: ""
     - Class: rviz_default_plugins/PointCloud2
       Name: LidarPoints
-      Enabled: true
+      Enabled: false
+      # off by default now that KissIcpLocalMap below shows the same lidar
+      # data accumulated into a real map -- flip this back on if you
+      # specifically want to see raw single-scan points instead.
       Topic:
         Value: /robot1/lidar/points
+      Size (m): 0.02
+      Style: Points
+      Color Transformer: AxisColor
+    - Class: rviz_default_plugins/Odometry
+      Name: OdomTrajectory
+      Enabled: true
+      # KISS-ICP's own bundled kiss_icp.rviz had this same display (named
+      # "LiDAR Odometry", on the pre-rename `kiss/odometry` topic) -- this is
+      # the equivalent now that KISS-ICP publishes directly to /robot1/odom
+      # (see docs/autonomous_exploration_plan.adoc's Option A). Shrunk Shape
+      # from upstream's 1m axes (sized for a much bigger vehicle) down to
+      # something sane for a ~0.7m-long robot.
+      #
+      # Position Tolerance previously (0.05m) was smaller than the axis
+      # length (0.15m), so at normal driving speed (odom publishes ~9-10Hz)
+      # consecutive kept tripods landed closer together than they are long
+      # and heavily overlapped each other -- that's what "looks like shit"
+      # meant, not an actual odometry-quality problem. Now 0.2m (bigger than
+      # the axes) so markers are visually distinct, with Keep raised to 40 to
+      # compensate (spacing x count ~= trail length) so the trail still
+      # covers a useful few meters instead of shrinking to almost nothing.
+      # Covariance explicitly disabled (matching upstream's kiss_icp.rviz) --
+      # I'd omitted this property entirely, so RViz fell back to its own
+      # built-in default of *enabled*, which is exactly the "yellow circles
+      # around the robot" -- covariance ellipses drawn at every kept pose,
+      # not the axis-tripod trajectory itself.
+      Covariance:
+        Value: false
+      Topic:
+        Value: /robot1/odom
+      Keep: 40
+      Position Tolerance: 0.2
+      Angle Tolerance: 0.2
+      Shape:
+        Value: Axes
+        Axes Length: 0.12
+        Axes Radius: 0.015
+    - Class: rviz_default_plugins/PointCloud2
+      Name: KissIcpLocalMap
+      Enabled: true
+      # KISS-ICP's own accumulated voxel map (the point cloud it registers
+      # each new scan against) -- the closest thing it has to "the map" since
+      # it has no occupancy-grid output of its own (see
+      # docs/autonomous_exploration_plan.adoc). Only published when
+      # kiss_icp.launch.py's publish_debug_clouds is on; decoupled from that
+      # launch file's own separate RViz window (which is broken anyway once
+      # lidar_odom_frame is renamed away from its "odom_lidar" default).
+      Topic:
+        Value: /robot1/kiss/local_map
       Size (m): 0.02
       Style: Points
       Color Transformer: AxisColor
@@ -56,7 +115,7 @@ Visualization Manager:
       Max Value: 25.0
     - Class: rviz_default_plugins/PointCloud2
       Name: CameraPoints
-      Enabled: true
+      Enabled: false
       Topic:
         Value: /robot1/camera/points
       Size (m): 0.01
@@ -74,6 +133,32 @@ Visualization Manager:
       Enabled: true
       Topic:
         Value: /robot1/map
+    - Class: rviz_default_plugins/Map
+      Name: GlobalCostmap
+      Enabled: true
+      Topic:
+        Value: /robot1/global_costmap/costmap
+      Color Scheme: costmap
+      Alpha: 0.5
+    - Class: rviz_default_plugins/Map
+      Name: LocalCostmap
+      Enabled: false
+      Topic:
+        Value: /robot1/local_costmap/costmap
+      Color Scheme: costmap
+      Alpha: 0.5
+    - Class: rviz_default_plugins/Path
+      Name: GlobalPlan
+      Enabled: true
+      Topic:
+        Value: /robot1/plan
+      Color: 0; 255; 0
+    - Class: rviz_default_plugins/Polygon
+      Name: Footprint
+      Enabled: true
+      Topic:
+        Value: /robot1/local_costmap/published_footprint
+      Color: 255; 255; 0
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
