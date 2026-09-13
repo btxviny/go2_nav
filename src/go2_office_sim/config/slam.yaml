@@ -40,9 +40,10 @@
     max_laser_range: 25.0
     min_laser_range: 0.15
     transform_publish_period: 0.02
-    transform_timeout: 0.5  # was 0.3 -- see collision_monitor's comment in
-    # nav2_params.yaml: KISS-ICP's odom TF has more jitter than the old fixed-
-    # rate kinematic odometry did.
+    transform_timeout: 1.0  # was 0.3, then 0.5 -- see collision_monitor's
+    # comment in nav2_params.yaml: KISS-ICP's odom TF has more jitter than the
+    # old fixed-rate kinematic odometry did, and 0.5 still wasn't enough
+    # margin under this machine's real CPU contention.
     tf_buffer_duration: 30.0
 
     # throttle_scans + scan_queue_size added after a real crash this session:
@@ -69,7 +70,19 @@
     scan_buffer_maximum_scan_distance: 25.0
     link_match_minimum_response_fine: 0.1
     link_scan_maximum_distance: 1.5
-    loop_search_maximum_distance: 3.0
+    # 6.0, not slam_toolbox's stock 3.0: this is the coarse radius slam_toolbox
+    # will even consider a past pose as a loop-closure candidate around the
+    # current (possibly drifted) estimate -- KISS-ICP is a pure scan-matching
+    # odometry source with no wheel encoders/IMU-integrated velocity to anchor
+    # short-term drift the way a typical ground-robot stack has, so by the
+    # time the robot revisits an area accumulated drift can plausibly exceed
+    # the stock 3m search radius, which would silently skip loop closure
+    # entirely rather than fail it -- it never even looks. 6.0 gives real
+    # headroom for that while staying well under loop_search_space_dimension's
+    # own 8.0 (the fine correlation grid's own extent once a candidate region
+    # IS found) -- no point widening the coarse filter past what the fine
+    # search step can actually use.
+    loop_search_maximum_distance: 6.0
     do_loop_closing: true
     loop_match_minimum_chain_size: 10
     loop_match_maximum_variance_coarse: 3.0

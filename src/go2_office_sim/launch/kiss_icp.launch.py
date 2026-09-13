@@ -53,8 +53,17 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     declare_use_sim_time = DeclareLaunchArgument('use_sim_time', default_value='true')
 
+    # Our own tuning, not kiss-icp's own shipped config.yaml (that file is
+    # explicitly commented "just an example... not really meant to use for
+    # any particular dataset" -- its 100m max_range and 500-iteration ICP
+    # ceiling were the likely source of periodic TF-publish stalls long
+    # enough to strand a scan message past nav2_costmap_2d's/tf2's ~10s
+    # buffer window; see config/kiss_icp.yaml's own comments for the full
+    # story). Confirmed live: slam_toolbox's own message filter and both
+    # Nav2 costmaps were all periodically dropping /robot1/scan with
+    # "earlier than all the data in the transform cache" before this fix.
     default_config_file = os.path.join(
-        get_package_share_directory('kiss_icp'), 'config', 'config.yaml')
+        get_package_share_directory('go2_office_sim'), 'config', 'kiss_icp.yaml')
 
     kiss_icp_node = Node(
         package='kiss_icp', executable='kiss_icp_node', name='kiss_icp_node',

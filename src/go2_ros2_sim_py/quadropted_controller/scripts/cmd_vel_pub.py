@@ -63,7 +63,18 @@ class RobotVelocityHandler(Node):
 
         new_msg.cmd_vel.angular.x = msg.angular.x
         new_msg.cmd_vel.angular.y = msg.angular.y
-        new_msg.cmd_vel.angular.z = self.limit(msg.angular.z, -1.0, 1.0)
+        # 2.0, not 1.0: this hard clamp was silently undoing Nav2's own
+        # rotate_to_heading_angular_vel tuning (nav2_params.yaml raised it to
+        # 1.6 rad/s, with velocity_smoother allowing up to 1.9, but every
+        # angular.z command still got capped right back down to 1.0 here) --
+        # confirmed live as the actual cause of "walks fast but turns very
+        # slowly" surviving every Nav2-side speed increase. 2.0 leaves
+        # headroom above both of those instead of reintroducing the same cap.
+        # 2.5, not 2.0: "steer faster" per direct ask -- nav2_params.yaml's
+        # rotate_to_heading_angular_vel/velocity_smoother were raised again
+        # (to 2.0 / 2.3 rad/s), so this needs the same headroom bump or it
+        # becomes the new silent cap.
+        new_msg.cmd_vel.angular.z = self.limit(msg.angular.z, -2.5, 2.5)
 
         self.publisher_.publish(new_msg)
         if self.verbose:

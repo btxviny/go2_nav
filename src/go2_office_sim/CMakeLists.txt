@@ -16,6 +16,7 @@ install(PROGRAMS
   scripts/record_bag.sh
   scripts/keyboard_teleop.py
   scripts/send_nav_goal.py
+  scripts/run_stack.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 

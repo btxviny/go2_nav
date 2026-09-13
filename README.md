@@ -378,7 +378,20 @@ parallel xacro. Summary:
   lidar upgraded from a single-ring 2D scan to a real 3D scan (900×40 samples, −7°…+52°,
   range 0.1–25 m); topic renamed `scan`→`lidar` since gz-sim's raw multi-ring range array is
   no longer a valid 2D `LaserScan` once there's more than one elevation ring — `/points` off
-  that topic is the real payload.
+  that topic is the real payload. Also added an `initial_value` to every leg joint's
+  `ros2_control` position state, matching `RobotController.py`'s real standing-stance
+  target — the actual fix for the spawn tip-over bug (see Known Issues); without it every
+  joint spawns at 0 and gets snapped toward the real target the instant the gait controller
+  activates, with gravity already acting on the body.
+- **`quadropted_controller/scripts/cmd_vel_pub.py`** — raised the hardcoded `angular.z`
+  clamp from ±1.0 to ±2.0 rad/s. It was silently undoing Nav2's own
+  `rotate_to_heading_angular_vel` tuning (`nav2_params.yaml` raises it to 1.6 rad/s, with
+  `velocity_smoother` allowing up to 1.9) — every angular command still got capped back down
+  to 1.0 here regardless, which is why the robot kept turning slowly even after every
+  Nav2-side speed increase. `linear.x`/`linear.y` still go through this file's own nonlinear
+  `multiply_and_limit` reshaping curve, untouched — live speed measurements there came out
+  too noisy/contaminated (a stale Nav2 goal was still executing server-side from an earlier
+  killed test script) to safely recalibrate that one.
 - **`quadropted_controller/RobotController/RobotController.py`** —
   `velocity_callback` now zeroes `angular.x`/`angular.y` (roll/pitch) before they reach the
   gait controller. They were never meant to be user-commandable: `TrotStanceController
@@ -407,20 +420,23 @@ traced with a live TF dump.
 
 ## Known issues
 
-- **Robot sometimes tips over within a few seconds of spawning — unresolved.** Not a
-  spawn-height or startup-timing problem (both were tried and ruled out: sampling the
-  robot's pose every 0.5s after spawn shows pitch climbing *smoothly* from ~17° to ~118°
-  over about 3 real seconds — well after landing/settling — before freezing solid, with
-  ~0.5m of lateral drag during that window). That pattern means the gait controller is
-  actively walking itself over, not reacting to a bad landing impact. Two suspects, both in
-  upstream `quadropted_controller` code untouched by this project's own patches: (1)
-  `TrotGaitController`'s idle/`autoRest` logic not actually engaging with zero commanded
-  velocity, keeping it in an active gait cycle when it should hold a static stance, or (2)
-  the hardcoded `default_stance` foot-location geometry (`Robot.__init__`'s `body`/`legs`
-  constants) not matching this project's actual URDF leg proportions, producing an
-  inherently off-balance standing pose. Not yet root-caused — Nav2/KISS-ICP/SLAM all still
-  function even with the robot tipped (it can still drag/shuffle in a way both track), so
-  this hasn't blocked navigation testing, but it's a real, open bug.
+- ~~Robot sometimes tips over within a few seconds of spawning~~ **fixed.** Root cause
+  found by watching actual joint commands, not just the body's pose: every leg joint spawns
+  at 0 (fully extended) by default, but the IK gait controller commands its real
+  ~0.86-1.89 rad standing-stance target from the very first control tick regardless — so
+  position control snaps all 12 joints from 0 toward that very different target at once,
+  while gravity is already acting on the body. Confirmed live via `joint_states` sampling
+  that the *commanded* stance was already correct and static within about 1s of spawn, yet
+  the *body* kept visibly tipping for several more seconds afterward — this idle stance has
+  no active balance feedback at all (legs just hold a fixed angle relative to the trunk), so
+  once that initial snap perturbed the body even slightly, nothing corrected it and physics
+  alone finished the fall. Fixed by giving every leg joint an `initial_value` in
+  `go2_description/xacro/gazebo.xacro` matching that exact stance (so there's no snap to
+  begin with), paired with `office_sim.launch.py`'s `z_pose` raised to 0.30 (empirically
+  confirmed, not simply `RobotController.py`'s documented 0.25m — that undershot the real
+  geometric clearance for these joint angles and caused instant ground interpenetration).
+  Confirmed live with both fixes together: settles to an essentially perfectly level pose
+  within 1-2s and stays rock solid over 20+s of testing.
 - **Nav2 bringup can stall on a loaded machine.** A lifecycle node's `change_state` service
   response can get lost at the DDS layer under CPU contention (confirmed live: a node
   finished configuring internally but `lifecycle_manager` never got the acknowledgment,

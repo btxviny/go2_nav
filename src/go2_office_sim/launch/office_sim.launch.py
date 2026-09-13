@@ -45,14 +45,24 @@ def generate_launch_description():
 
     x_pose = LaunchConfiguration('x_pose', default='0.0')
     y_pose = LaunchConfiguration('y_pose', default='-9.0')
-    # Reverted back to upstream's 0.4: live testing this session showed the
-    # tip-over isn't a spawn-height/timing problem at all (see the
-    # investigation notes on `controller` below) -- pitch grows gradually
-    # over ~2-3 real seconds and then freezes, well after any landing impact
-    # would have happened, and lowering this value (tried 0.28) made it
-    # measurably worse, not better. Real cause is still open; don't re-tune
-    # this value again without new evidence.
-    z_pose = LaunchConfiguration('z_pose', default='0.4')
+    # 0.30 -- empirically confirmed live (not just RobotController.py's
+    # documented default_height of 0.25; that undershot the real geometric
+    # clearance for the exact stance joint angles below, causing instant
+    # ground interpenetration at spawn). Earlier attempts to fix the tip-over
+    # by changing this value alone (0.4, then 0.28) made things worse, not
+    # better, because the real cause was never spawn height by itself: joints
+    # spawned at 0 (fully extended) while the controller immediately commanded
+    # its real ~0.86-1.89 rad stance target, and position control snapped all
+    # 12 joints toward that very different target at once while gravity was
+    # already acting, an uneven whole-body disturbance that this idle stance
+    # has no active balance feedback to recover from. Fixed at the source in
+    # go2_description/xacro/gazebo.xacro (initial_value on every leg joint,
+    # so there's no snap to begin with); this height only matters paired with
+    # that fix, not on its own. With both fixes together, confirmed live:
+    # settles to an essentially perfectly level pose within about 1-2s and
+    # stays rock solid (tested 20+s) -- a tiny sub-1-degree wobble at the very
+    # first sample, gone by the second.
+    z_pose = LaunchConfiguration('z_pose', default='0.30')
     declare_x = DeclareLaunchArgument('x_pose', default_value=x_pose)
     declare_y = DeclareLaunchArgument('y_pose', default_value=y_pose)
     declare_z = DeclareLaunchArgument('z_pose', default_value=z_pose)

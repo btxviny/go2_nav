@@ -13,12 +13,16 @@ bt_navigator:
     odom_topic: /robot1/odom
     bt_loop_duration: 10
     default_server_timeout: 20
-    # default_nav_to_pose_bt_xml / default_nav_through_poses_bt_xml deliberately
-    # left unset: a bare filename here (no package path) makes bt_navigator's
-    # fopen fail outright ("Couldn't open input XML file"). nav2_bringup's own
-    # stock nav2_params.yaml doesn't set these either (see its comment on this
-    # exact pair) -- bt_navigator's own compiled-in default already resolves to
-    # the correct full path under nav2_bt_navigator's share/behavior_trees dir.
+    # Explicit now, not left to the compiled in default (which was this exact
+    # file, byte for byte, before the two tweaks below): "more decisive,
+    # recalculate on obstacle" per direct ask needed a faster global replan
+    # rate than the stock 1 Hz, so this project now owns its own copy rather
+    # than silently depending on whatever nav2_bt_navigator ships as its
+    # default in a future upgrade. Must be an absolute filesystem path --
+    # bt_navigator's own fopen doesn't resolve package:// URIs -- so this is
+    # tied to this machine's install prefix like the rest of this single
+    # developer sim project already is.
+    default_nav_to_pose_bt_xml: "/home/viny/go2_nav/install/go2_office_sim/share/go2_office_sim/config/behavior_trees/navigate_to_pose_faster_replanning.xml"
 
 controller_server:
   ros__parameters:
@@ -34,7 +38,11 @@ controller_server:
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.3
-      movement_time_allowance: 15.0
+      # 8.0, not 15.0: "more decisive" per direct ask -- waiting up to 15s
+      # before Nav2 even considers itself stuck (and tries the BT's recovery
+      # round robin) reads as sluggish on a small office-sized map where a
+      # real stall is usually obvious well before then.
+      movement_time_allowance: 8.0
     goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.25
@@ -57,14 +65,20 @@ controller_server:
     # needed, just a lookahead point tracker.
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.3
+      # 0.4, not 0.3: raised for "more decisive/faster" per direct ask.
+      desired_linear_vel: 0.4
       lookahead_dist: 0.5
       min_lookahead_dist: 0.3
       max_lookahead_dist: 0.9
       lookahead_time: 1.5
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
-      approach_velocity_scaling_dist: 0.6
+      # 0.3, not 0.6: frontier goals are often short hops (a room-sized office),
+      # so at 0.6m the robot spent a large fraction of every trip decelerating
+      # rather than cruising -- this is a big piece of what "hesitant" meant in
+      # practice, since it rarely got to actually reach desired_linear_vel
+      # before having to slow for approach.
+      approach_velocity_scaling_dist: 0.3
       max_allowed_time_to_collision_up_to_carrot: 1.0
       use_regulated_linear_velocity_scaling: true
       use_cost_regulated_linear_velocity_scaling: true
@@ -79,19 +93,38 @@ controller_server:
       # only real, sharp direction changes get a dedicated spin-in-place
       # instead of the controller just arcing the path in normally.
       rotate_to_heading_min_angle: 0.7
-      rotate_to_heading_angular_vel: 0.5
-      max_angular_accel: 1.5
+      # 1.0 rad/s, not 0.5: the actual pivot speed once a rotate-in-place IS
+      # triggered -- 0.5 rad/s meant even a 90 degree turn took ~3s of just
+      # standing and spinning, a big contributor to feeling "hesitant" on
+      # anything but a dead-straight path.
+      # 1.6, not 1.0: "turns too slow" -- 1.0 rad/s still made a 90deg pivot
+      # take ~1s of standing still, noticeable now that cruise speed is fast.
+      # 2.0, not 1.6: "steer faster" per direct ask -- confirmed live headroom
+      # existed (cmd_vel_pub.py's downstream clamp and velocity_smoother's cap
+      # were both above 1.6 already), so this and the two knobs below were
+      # raised together to actually use it.
+      rotate_to_heading_angular_vel: 2.0
+      # 2.5, not 1.5: lets the controller actually reach the higher angular
+      # target quickly instead of ramping into it slowly, and also speeds up
+      # how fast it can react to path curvature while cruising (not just
+      # dedicated rotate-in-place spins).
+      # 3.5, not 2.5: "steer faster" -- matches the rotate_to_heading_angular_vel
+      # bump above with a proportionally faster ramp to it, so the higher top
+      # speed isn't spent mostly accelerating into.
+      max_angular_accel: 3.5
       max_linear_accel: 1.0
       max_linear_decel: 1.0
       min_turning_radius: 0.0
-      # 0.5, not 0.2: KISS-ICP's odom->base_link TF (docs/autonomous_exploration_plan.adoc's
-      # Option A) is published once per finished scan registration rather than
-      # at a strict fixed rate, so it has real jitter (confirmed live: ~7-10Hz
-      # with up to ~0.3s gaps) that the old fixed-50Hz kinematic odometry never
-      # had. 0.2 was tight enough to cause spurious "extrapolation into the
-      # future" TF failures under normal jitter -- same reasoning applied to
-      # behavior_server and collision_monitor below.
-      transform_tolerance: 0.5
+      # 1.0, not 0.2 (or the 0.5 tried after that): KISS-ICP's odom->base_link
+      # TF (docs/autonomous_exploration_plan.adoc's Option A) is published once
+      # per finished scan registration rather than at a strict fixed rate, so
+      # it has real jitter (confirmed live: ~7-10Hz with gaps) that the old
+      # fixed-50Hz kinematic odometry never had, worse under this machine's
+      # real CPU contention. 0.5 still failed live ("tf_help: Transform
+      # data too old ... map to odom", observed gap 0.53s -- right on top of
+      # that tolerance), causing goals to abort instantly. Same reasoning
+      # applied to behavior_server and collision_monitor below.
+      transform_tolerance: 1.0
       use_collision_detection: true
       max_robot_pose_search_dist: 5.0
 
@@ -99,6 +132,14 @@ local_costmap:
   local_costmap:
     ros__parameters:
       use_sim_time: true
+      # Tried lowering update_frequency/publish_frequency below Nav2's own
+      # defaults (5.0/2.0) here to cut CPU load -- reverted: it made the
+      # robot barely move on real goals (a slower-updating local costmap
+      # likely let stale "occupied" cells, including the walking gait's own
+      # legs, linger longer, and RegulatedPurePursuitController's
+      # use_cost_regulated_linear_velocity_scaling throttles speed hard near
+      # perceived-nearby cost) without actually reducing the message-filter
+      # drops it was meant to fix. Left at Nav2's defaults.
       global_frame: odom
       robot_base_frame: base_link
       rolling_window: true
@@ -199,11 +240,14 @@ behavior_server:
       plugin: "nav2_behaviors::Wait"
     global_frame: odom
     robot_base_frame: base_link
-    transform_tolerance: 0.5  # see FollowPath's comment above
+    transform_tolerance: 1.0  # see FollowPath's comment above
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.6
+    # Raised alongside FollowPath's rotate_to_heading_angular_vel above, same
+    # "turns too slow" / "steer faster" ask -- this is the Spin recovery
+    # behavior's own speed, a separate knob from path-following rotation.
+    max_rotational_vel: 1.6
     min_rotational_vel: 0.1
-    rotational_acc_lim: 1.5
+    rotational_acc_lim: 3.0
 
 waypoint_follower:
   ros__parameters:
@@ -217,10 +261,20 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    max_velocity: [0.35, 0.0, 0.6]
-    min_velocity: [-0.35, 0.0, -0.6]
-    max_accel: [1.0, 0.0, 1.5]
-    max_decel: [-1.0, 0.0, -1.5]
+    # Raised alongside FollowPath's desired_linear_vel (0.4) and
+    # rotate_to_heading_angular_vel (1.0) above -- these caps were only
+    # slightly above the old targets, so without raising them too, the
+    # smoother would have silently clipped the new targets right back down.
+    # Angular cap raised to 2.3 (was 1.9) to give headroom above FollowPath's
+    # new 2.0 rad/s rotate_to_heading_angular_vel ("steer faster" ask) --
+    # otherwise the smoother would silently clip the faster turn right back
+    # down, same reasoning as the original 1.1->1.9 bump documented here.
+    max_velocity: [0.45, 0.0, 2.3]
+    min_velocity: [-0.45, 0.0, -2.3]
+    # 3.6, not 2.5: matches FollowPath's max_angular_accel bump to 3.5 (plus
+    # headroom) so the smoother doesn't cap the faster ramp-up right back down.
+    max_accel: [1.0, 0.0, 3.6]
+    max_decel: [-1.0, 0.0, -3.6]
     odom_topic: /robot1/odom
     odom_duration: 0.1
 
@@ -240,7 +294,7 @@ collision_monitor:
     odom_frame_id: "odom"
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "cmd_vel"
-    transform_tolerance: 0.5  # see FollowPath's comment above -- this was the
+    transform_tolerance: 1.0  # see FollowPath's comment above -- this was the
     # node actually observed stalling cmd_vel with "Robot to stop due to
     # invalid source" on every KISS-ICP TF jitter blip before this fix.
     source_timeout: 1.0

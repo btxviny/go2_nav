@@ -18,79 +18,111 @@
             <hardware>
                 <plugin>gz_ros2_control/GazeboSimSystem</plugin>
             </hardware>
-            
+
+            <!--
+            initial_value on every position state_interface below: without
+            this, every joint spawns at 0 (fully extended/straight, not a
+            standing pose) and the IK gait controller commands its real
+            0.25m-stance target (RobotController.py's default_height) from
+            the very first control tick regardless, so position control
+            snaps all 12 joints from 0 toward that very different target as
+            fast as it can, all at once, while gravity is already acting on
+            the body. That sudden, uneven whole-body reconfiguration was the
+            real trigger behind this project's tip-over bug: live joint_states
+            sampling this session showed the *commanded* stance was already
+            correct and static within about 1s of spawn, yet the *body* kept
+            visibly tipping for several more seconds afterward, because this
+            idle stance has no active balance feedback at all (legs just hold
+            a fixed angle relative to the trunk), so once that initial snap
+            perturbs the body even slightly, nothing corrects it and physics
+            alone finishes the fall. Spawning already in the target stance
+            (paired with office_sim.launch.py's z_pose, empirically confirmed
+            at 0.30; see its own comment for why that's not simply 0.25)
+            means there's nothing to snap into and no disturbance to begin
+            with. Confirmed live with both fixes together: settles to an
+            essentially perfectly level pose within about 1-2s and stays
+            rock solid.
+
+            Values are this project's own live measurement, not guessed:
+            forward-kinematics-verified joint angles for RobotController.py's
+            actual default_stance at height=0.25, front legs (lf/rf) and
+            rear/hind legs (lh/rh) differing slightly because of Robot.__init__'s
+            own x_shift_front/x_shift_back offsets. If default_height in
+            RobotController.py or the stance geometry in Robot.__init__ is
+            ever retuned, these will need recomputing to match.
+            -->
             <joint name="lf_hip_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
             <joint name="lf_upper_leg_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">0.8614802851010153</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
             <joint name="lf_lower_leg_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">-1.882620541626505</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
-            
+
             <joint name="rf_hip_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
             <joint name="rf_upper_leg_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">0.8614802851010153</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
             <joint name="rf_lower_leg_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">-1.882620541626505</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
 
             <joint name="lh_hip_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
             <joint name="lh_upper_leg_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">0.9436278382993397</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
             <joint name="lh_lower_leg_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">-1.8872556765986797</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
 
             <joint name="rh_hip_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
             <joint name="rh_upper_leg_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">0.9436278382993397</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>
             <joint name="rh_lower_leg_joint">
                 <command_interface name="position"/>
-                <state_interface name="position"/>
+                <state_interface name="position"><param name="initial_value">-1.8872556765986797</param></state_interface>
                 <state_interface name="velocity"/>
                 <state_interface name="effort"/>
             </joint>

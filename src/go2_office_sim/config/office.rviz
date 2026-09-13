@@ -92,6 +92,13 @@ Visualization Manager:
     - Class: rviz_default_plugins/Image
       Name: CameraColor
       Enabled: true
+      # off by default: image rendering is real CPU load RViz doesn't need to
+      # spend while exploring (not used by SLAM/Nav2 at all, lidar-only) --
+      # this machine runs at/over its core count with the full stack up
+      # (confirmed live: load average 9.0 on 8 cores), and cutting this was
+      # one of the concrete levers for the resulting costmap "flickering"
+      # (Message Filter dropping message, TF cache exceeded under load).
+      # Flip back on for camera debugging.
       Topic:
         Value: /robot1/camera/image
     - Class: rviz_default_plugins/Image
