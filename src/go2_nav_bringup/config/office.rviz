@@ -92,17 +92,24 @@ Visualization Manager:
     - Class: rviz_default_plugins/PointCloud2
       Name: FastLioMap
       Enabled: false
-      # spark_fast_lio's own registered-scan accumulation (see
-      # fast_lio.launch.py) -- the equivalent of KissIcpLocalMap above, but
-      # for the --odom fast_lio backend. Off by default since KISS-ICP is the
-      # default backend and this topic has nothing publishing to it then;
-      # flip on (and flip KissIcpLocalMap off) when running with
-      # `run_stack.sh --odom fast_lio`.
+      # spark_fast_lio's own /robot1/cloud_registered (see fast_lio.launch.py)
+      # is NOT an accumulated map the way KISS-ICP's kiss/local_map above is --
+      # confirmed by reading publishFrameWorld() in spark_fast_lio.cpp: each
+      # message is just the CURRENT scan transformed into map_frame ("odom"),
+      # replaced wholesale every cycle. spark_fast_lio's real accumulated map
+      # lives only inside its internal ikd-Tree, which it never publishes as
+      # its own topic. Decay Time 999999 makes RViz itself accumulate every
+      # incoming scan into a persistent visual trail instead of only showing
+      # the latest one -- same fix this project's original (pre-restructure)
+      # fastlio.rviz used for the same reason. Off by default since KISS-ICP
+      # is the default backend; flip on (and flip KissIcpLocalMap off) when
+      # running with `run_stack.sh --odom fast_lio`.
       Topic:
         Value: /robot1/cloud_registered
       Size (m): 0.02
       Style: Points
       Color Transformer: AxisColor
+      Decay Time: 999999
     - Class: rviz_default_plugins/Image
       Name: CameraColor
       Enabled: true
