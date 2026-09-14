@@ -137,7 +137,7 @@ Visualization Manager:
       Color: 255; 0; 0
     - Class: rviz_default_plugins/Map
       Name: Map
-      Enabled: true
+      Enabled: false
       Topic:
         Value: /robot1/map
     - Class: rviz_default_plugins/Map

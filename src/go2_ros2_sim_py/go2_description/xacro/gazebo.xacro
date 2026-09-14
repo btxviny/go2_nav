@@ -152,7 +152,9 @@
             <sensor name="lidar" type="gpu_lidar">
                 <pose>0 0 0 0 0 0</pose>
                 <visualize>false</visualize>
-                <update_rate>10</update_rate>
+                <!-- 7, not 40/10: real MEMS/spinning lidars run well under their
+                     datasheet peak rate once real-world constraints apply. -->
+                <update_rate>7</update_rate>
                 <lidar>
                     <scan>
                         <horizontal>
@@ -168,7 +170,14 @@
                     </scan>
                     <range>
                         <min>0.10</min>
-                        <max>40.0</max>
+                        <!-- 20.0, not 40.0: the datasheet peak range assumes
+                             high-reflectivity targets; a real Livox Mid-360 sees
+                             far less in a typical indoor office at ~10% reflectivity.
+                             Still above this scene's ~20x20m extent, and below
+                             downstream consumers' own 25.0 cap (kiss_icp.yaml,
+                             slam.yaml, pointcloud_to_laserscan.yaml), so the
+                             sensor itself is now the real limiting factor. -->
+                        <max>20.0</max>
                     </range>
                 </lidar>
                 <topic>/${robot_name}/lidar</topic>
