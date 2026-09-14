@@ -89,6 +89,20 @@ Visualization Manager:
       Size (m): 0.02
       Style: Points
       Color Transformer: AxisColor
+    - Class: rviz_default_plugins/PointCloud2
+      Name: FastLioMap
+      Enabled: false
+      # spark_fast_lio's own registered-scan accumulation (see
+      # fast_lio.launch.py) -- the equivalent of KissIcpLocalMap above, but
+      # for the --odom fast_lio backend. Off by default since KISS-ICP is the
+      # default backend and this topic has nothing publishing to it then;
+      # flip on (and flip KissIcpLocalMap off) when running with
+      # `run_stack.sh --odom fast_lio`.
+      Topic:
+        Value: /robot1/cloud_registered
+      Size (m): 0.02
+      Style: Points
+      Color Transformer: AxisColor
     - Class: rviz_default_plugins/Image
       Name: CameraColor
       Enabled: true
