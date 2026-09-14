@@ -12,24 +12,56 @@
     angle_max: 3.14159
     angle_increment: 0.00349066  # 0.2 deg -> 1800 bins, well under the 900 azimuth samples
     scan_time: 0.1
-    # 0.5, not 0.15: this is the real fix for Nav2's "invisible obstacles" --
-    # the walking gait's own front legs swing close enough to the
-    # back-mounted lidar to register as scan points (confirmed earlier this
-    # session: a persistent ~0.46m reading with the robot standing still near
-    # a spawn point designed for >=1.0m clearance, i.e. nothing real was that
+    # 0.5: this is the real fix for Nav2's "invisible obstacles" -- the
+    # walking gait's own legs swing close enough to the back-mounted lidar
+    # to register as scan points (confirmed earlier this session: a
+    # persistent ~0.46m reading with the robot standing still near a spawn
+    # point designed for >=1.0m clearance, i.e. nothing real was that
     # close). Those self-hit points feed straight into slam_toolbox AND both
     # Nav2 costmaps (local_costmap's voxel_layer, global_costmap's
     # obstacle_layer) as if they were real obstacles, appearing and
     # disappearing as the legs swing -- that's the "invisible obstacles"
-    # behavior, and it's also very likely what's forcing the excessive
+    # behavior, and it's also very likely what's forcing excessive
     # spinning: phantom obstacles trigger costmap changes and progress-check
     # failures, causing frequent replanning (RegulatedPurePursuit rotates in
     # place on any new plan with a large-enough heading change) and recovery
-    # behavior's own "Spin" action kicking in when navigation stalls. 0.5m
-    # clears that ~0.46m self-hit distance with margin while still detecting
-    # any real obstacle beyond it -- local_costmap's own 0.40m inflation
-    # radius already covers the remaining close-in gap for genuine hazards.
-    range_min: 0.5
+    # behavior's own "Spin" action kicking in when navigation stalls.
+    #
+    # Briefly raised to 0.62 (1.5x the robot's own circumscribed footprint
+    # radius, sqrt(0.38^2+0.17^2)) on the theory that the lidar's new range
+    # noise (gazebo.xacro, stddev 0.02) might be pushing self-hits past
+    # 0.5m -- reverted after that caused a real, observed failure: the
+    # robot walked into and got physically wedged under collab_table (a
+    # ~1.04x1.04m table, blender/scene_objects.json), because 0.62's 1.24m-
+    # wide blind zone made an object that size functionally invisible to
+    # the lidar until the robot's body was already touching it, with no
+    # costmap inflation warning beforehand. A direct survey of the raw 3D
+    # cloud through a full walk+turn gait cycle found the true per-scan
+    # self-hit minimum never exceeded 0.458m across 306 samples, suggesting
+    # 0.5 was already sufficient margin.
+    #
+    # 0.55, not that 0.5: confirmed live afterward that 0.5 still isn't
+    # quite enough on its own -- caught one real self-hit at 0.465m from
+    # the lidar (traced a stray occupied cell in the live SLAM map back to
+    # the robot's own actual pose plus the lidar's -0.26m body-frame
+    # offset; 0.465 < 0.5 threshold, so it passed straight through). A
+    # single stray self-hit like this only becomes a permanent black mark
+    # in slam_toolbox's map if the same absolute cell gets hit repeatedly,
+    # which needs the robot to be near-stationary for a while (translating
+    # normally scatters a self-hit's *absolute* position across many
+    # different cells, never accumulating enough weight at any one of
+    # them) -- this session's own extended idle/diagnostic periods are the
+    # likely trigger, not ordinary driving, but the underlying gap was
+    # real regardless. 0.55 adds real margin over the confirmed 0.465m
+    # leak without going anywhere near 0.62's blind-zone danger (1.10m
+    # diameter now, vs. 0.62's 1.24m and the original 1.0m) -- still not a
+    # complete fix (any single fixed isotropic radius trades off against
+    # real nearby objects around that size, like this scene's landmark
+    # cubes/cones at 0.4-0.55m), just closes the specific gap that was
+    # observed. A direction-aware filter (tight only where the legs
+    # actually swing, left near the sensor's real 0.10m limit everywhere
+    # else) would close it properly; not implemented.
+    range_min: 0.55
     range_max: 25.0
     use_inf: true
     concurrency_level: 1

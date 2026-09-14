@@ -35,16 +35,20 @@
   ros__parameters:
     data:
       deskew: True
-      # 25.0, not 100.0: matches this project's lidar's actual configured
-      # range (gazebo.xacro / pointcloud_to_laserscan.yaml both already use
-      # 25.0) -- nothing in this scene is ever farther than that, so every
-      # point beyond it that the generic default would still consider is
-      # pure wasted registration work.
+      # 25.0, not 100.0: an upper safety ceiling above what this scene ever
+      # needs (nothing is ever farther than ~25m), not a tight match to the
+      # sensor's own current range -- gazebo.xacro's lidar max is now 15.0
+      # (see its own comment), so points past that never arrive here at all;
+      # left at 25.0 rather than re-tightened to 15.0 so this file doesn't
+      # need to track the sensor's own value exactly, only stay above it.
       max_range: 25.0
-      # 0.5, matching pointcloud_to_laserscan.yaml's range_min self-hit
-      # filter and its own reasoning: filters the same leg self-hit noise
-      # out of KISS-ICP's own registration, not just the 2D scan Nav2 sees.
-      min_range: 0.5
+      # 0.55, matching pointcloud_to_laserscan.yaml's range_min self-hit
+      # filter and its own reasoning (see that file's comment for the full
+      # story, including why 0.62 was tried and reverted, and why 0.5 alone
+      # still let one confirmed self-hit through at 0.465m): filters the
+      # same leg self-hit noise out of KISS-ICP's own registration, not
+      # just the 2D scan Nav2 sees.
+      min_range: 0.55
 
     mapping:
       # Explicit, not left at "default = max_range/100.0": that default

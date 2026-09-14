@@ -4,12 +4,16 @@ This project's own original work is MIT-licensed (see [LICENSE](LICENSE)). It bu
 third-party code and assets under different, separate terms, documented here plainly
 rather than glossed over.
 
-## src/go2_ros2_sim_py/ -- no upstream license
+## src/go2_description/, src/gazebo_sim/, src/quadropted_controller/, src/quadropted_msgs/ -- no upstream license
 
 Vendored from [go2_ros2_sim_py](https://github.com/abutalipovvv/go2_ros2_sim_py) by
 abutalipovvv (commit `92d6bc9`), with our own patch on top (commit history preserved via
-`git subtree` -- `git log -- src/go2_ros2_sim_py` shows all of it; see the README's
-"Patches to upstream" section for what changed and why).
+`git subtree` -- `git log -- src/go2_description src/gazebo_sim src/quadropted_controller
+src/quadropted_msgs` shows all of it; see [docs/PATCHES.md](docs/PATCHES.md) for what
+changed and why). Originally vendored as one nested `src/go2_ros2_sim_py/` folder
+containing all four packages; flattened to individual top-level packages under `src/` for
+readability -- see [docs/upstream/](docs/upstream/) for the original upstream README and
+media, kept for attribution.
 
 **That upstream repository has no LICENSE file anywhere, and its README does not address
 licensing.** This is a real gap, not an oversight on our part: under default copyright law,

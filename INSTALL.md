@@ -68,9 +68,11 @@ git clone --recurse-submodules https://github.com/btxviny/go2_nav.git
 cd go2_nav
 ```
 
-`--recurse-submodules` matters: `src/kiss-icp` is a git submodule. (`src/go2_ros2_sim_py`
-is not — its history is merged directly into this repo via `git subtree`, so it comes
-along with a plain clone.) If you forgot the flag:
+`--recurse-submodules` matters: `src/kiss-icp` is a git submodule. (The robot-description
+and controller packages — `src/go2_description`, `src/gazebo_sim`,
+`src/quadropted_controller`, `src/quadropted_msgs` — are not; their history is merged
+directly into this repo via `git subtree`, so they come along with a plain clone.) If you
+forgot the flag:
 
 ```bash
 git submodule update --init --recursive
