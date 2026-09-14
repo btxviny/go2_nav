@@ -1,0 +1,77 @@
+## spark_fast_lio (FAST-LIO2, tightly-coupled LiDAR-IMU ESKF) tuning for this project.
+## Alternative to kiss_icp.yaml -- see fast_lio.launch.py for how this is wired into
+## the same real /robot1/odom + odom->base_link TF contract kiss_icp.launch.py uses.
+/**:
+  ros__parameters:
+    common:
+      map_frame: "odom"
+      lidar_frame: "laser_frame"
+      base_frame: "base_link"
+      imu_frame: "imu_link"
+      # "base" makes publishOdometry()'s child_frame_id resolve to base_frame
+      # ("base_link"), giving the same real odom->base_link edge kiss_icp
+      # provides -- confirmed by reading spark_fast_lio.cpp's publishOdometry(),
+      # which otherwise defaults to child_frame_id = imu_frame ("imu_link").
+      visualization_frame: "base"
+      time_sync_en: false
+
+    preprocess:
+      # GENERIC (see preprocess.h) -- added by this project's own patch because
+      # this sensor's bridged PointCloud2 only has x/y/z/intensity (no ring, no
+      # per-point time), so none of upstream's VELO16/OUST64/KMOUST64 handlers
+      # can be reused as-is.
+      lidar_type: 5
+      scan_line: 1        # no per-ring feature extraction on the GENERIC path
+      scan_rate: 7         # matches gazebo.xacro's gpu_lidar update_rate
+      timestamp_unit: 1    # unused by GENERIC (curvature always 0), kept sane
+      blind: 0.55          # mirrors kiss_icp.yaml's own min_range self-hit tuning
+
+    point_filter_num_for_preprocessing: 1
+    point_filter_num: 1
+
+    mapping:
+      acc_cov: 0.1
+      gyr_cov: 0.1
+      b_acc_cov: 0.0001
+      b_gyr_cov: 0.0001
+      fov_degree: 360.0
+      det_range: 15.0      # matches gpu_lidar's real 15.0 m max range
+      extrinsic_est_en: false
+      # laser_frame's origin expressed in imu_link's frame -- computed from
+      # go2_description/xacro/robot.xacro's fixed joints (base_link->imu_link
+      # is identity, base_link->laser_frame is xyz="-0.26 0.0 0.14", both
+      # rpy="0 0 0"), not a placeholder.
+      extrinsic_T: [-0.26, 0.0, 0.14]
+      extrinsic_R: [1.0, 0.0, 0.0,
+                    0.0, 1.0, 0.0,
+                    0.0, 0.0, 1.0]
+
+    # Bounded ~20x20m office, not the 1000.0 upstream default meant for outdoor
+    # maps -- that exact value was the root cause of an unbounded ikd-Tree
+    # memory leak the first time this project tried spark-fast-lio (see the
+    # MAX_INI_COUNT comment in imu_processing.hpp for the sibling init-time fix
+    # from that same debugging round).
+    cube_side_length: 60.0
+    filter_size_map: 0.3
+
+    gravity_alignment:
+      # With base_frame set (needed for the odom->base_link TF above), this
+      # subsystem otherwise blocks ALL odometry publishing until the robot has
+      # moved for num_moving_frames_thr_ consecutive scans -- confirmed by
+      # reading spark_fast_lio.cpp's processLidarAndImu(). That would make this
+      # backend not drop-in interchangeable with kiss_icp, which publishes
+      # immediately even from a stationary robot. Disabling it matches
+      # upstream's own mapping_dcist_rrg.launch.yaml precedent for base-frame-
+      # connected setups; the still-needed init-time gravity fix is the
+      # separate MAX_INI_COUNT patch in imu_processing.hpp.
+      enable_gravity_alignment: false
+
+    publish:
+      path_en: true
+      scan_publish_en: true
+      dense_publish_en: false
+      scan_bodyframe_pub_en: false
+
+    max_iteration: 4
+    verbose: false
+    runtime_pos_log_enable: false
