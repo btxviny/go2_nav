@@ -28,7 +28,7 @@ Press **numpad `0`** to look through the active camera.
 
 **Run the full simulation** (robot, sensors, teleop, RViz) — see the
 [top-level README](../README.md#quick-start) instead; this scene is consumed by
-`src/go2_office_sim`, not run standalone from here.
+`src/go2_nav_bringup`, not run standalone from here.
 
 ---
 
@@ -37,7 +37,7 @@ Press **numpad `0`** to look through the active camera.
 ```
 blender/
 ├── build_office.py          generates office.blend + scene_objects.json from scratch
-├── export_sdf.py            exports office.blend -> ../src/go2_office_sim/{models,worlds}
+├── export_sdf.py            exports office.blend -> ../src/go2_nav_bringup/{models,worlds}
 ├── office.blend             the scene (edit here, or regenerate with build_office.py)
 ├── office.blend1            Blender's automatic previous-save backup
 ├── office_original_backup.blend   the original empty room, before anything was built
@@ -141,7 +141,7 @@ for room-level planning.
 
 **`assets/` is not in this repository** (514 MB of Poly Haven source textures has no place
 in git history — see the top-level `.gitignore`). `office.blend` and the exported
-`../src/go2_office_sim/models/office_scene/` **are** committed normally and work fine
+`../src/go2_nav_bringup/models/office_scene/` **are** committed normally and work fine
 without `assets/` at all — you only need this section if you want to regenerate the scene
 from scratch or re-run `build_office.py`.
 
@@ -186,7 +186,7 @@ blender -b office.blend --python export_sdf.py
 ```
 
 Re-run this after **any** change to the .blend — save in Blender first. It writes straight
-into `../src/go2_office_sim/{models,worlds}` — the ROS package that actually gets launched —
+into `../src/go2_nav_bringup/{models,worlds}` — the ROS package that actually gets launched —
 so there's no separate copy step to remember. Nothing needs cleaning up in between; it
 overwrites what's there.
 

@@ -1,0 +1,19 @@
+/**:
+  ros__parameters:
+    data:
+      deskew: True
+      max_range: 25.0
+      min_range: 0.55
+
+    mapping:
+      voxel_size: 0.4
+      max_points_per_voxel: 20
+
+    adaptive_threshold:
+      initial_threshold: 1.0
+      min_motion_th: 0.1
+
+    registration:
+      max_num_iterations: 100
+      convergence_criterion: 0.0001
+      max_num_threads: 0

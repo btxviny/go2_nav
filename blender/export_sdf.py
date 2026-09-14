@@ -2,12 +2,12 @@
 
 Run:  blender -b office.blend --python export_sdf.py
 
-Writes straight into the go2_office_sim ROS package (a sibling of this file's
+Writes straight into the go2_nav_bringup ROS package (a sibling of this file's
 blender/ directory under the go2_nav workspace root), not a local gazebo/
 output here -- that package is what actually gets launched, and writing
 directly into it means there's no separate copy step to remember or forget:
-  ../src/go2_office_sim/models/office_scene/{model.config, model.sdf, meshes/*.glb}
-  ../src/go2_office_sim/worlds/office.sdf
+  ../src/go2_nav_bringup/models/office_scene/{model.config, model.sdf, meshes/*.glb}
+  ../src/go2_nav_bringup/worlds/office.sdf
 
 Design notes:
   * Visuals are glTF binary (.glb), Z-up, modifiers applied, textures downscaled.
@@ -23,7 +23,7 @@ import bpy, bmesh, os, json, math
 from mathutils import Matrix, Vector
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(BASE, "..", "src", "go2_office_sim")
+OUT = os.path.join(BASE, "..", "src", "go2_nav_bringup")
 MODEL_NAME = "office_scene"
 MODEL_DIR = os.path.join(OUT, "models", MODEL_NAME)
 MESH_DIR = os.path.join(MODEL_DIR, "meshes")

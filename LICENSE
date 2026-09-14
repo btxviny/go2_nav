@@ -22,8 +22,8 @@ SOFTWARE.
 
 ---
 
-This license covers this project's own original work: the go2_office_sim ROS
-package (src/go2_office_sim/), the Blender scene-authoring scripts (blender/),
+This license covers this project's own original work: the go2_nav_bringup ROS
+package (src/go2_nav_bringup/), the Blender scene-authoring scripts (blender/),
 and this project's documentation. It does NOT cover vendored or submoduled
 third-party code and assets, which remain under their own licenses -- see
 THIRD_PARTY_NOTICES.md.

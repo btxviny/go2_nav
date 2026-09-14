@@ -33,7 +33,7 @@ RUN apt-get install -y \
     ros-jazzy-ros2-control ros-jazzy-ros2-controllers ros-jazzy-gz-ros2-control \
     ros-jazzy-twist-mux ros-jazzy-teleop-twist-keyboard ros-jazzy-joint-state-publisher \
     ros-jazzy-robot-localization ros-jazzy-rmw-cyclonedds-cpp \
-    ros-jazzy-ros2launch ros-jazzy-camera-info-manager ros-jazzy-rqt-robot-steering \
+    ros-jazzy-ros2launch ros-jazzy-ros2run ros-jazzy-camera-info-manager ros-jazzy-rqt-robot-steering \
     ros-jazzy-tf-transformations ros-jazzy-ament-lint-auto ros-jazzy-ament-lint-common \
     ros-jazzy-sophus \
     git

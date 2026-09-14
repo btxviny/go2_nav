@@ -9,12 +9,19 @@
 # Blender source assets: 514MB of Poly Haven CC0 source textures, only
 # needed to regenerate the office scene from scratch. See blender/README.md
 # for how to re-obtain them. The actual runtime asset (office.blend,
-# src/go2_office_sim/models/office_scene/) is small and IS committed.
+# src/go2_nav_bringup/models/office_scene/) is small and IS committed.
 /blender/assets/
 
 # Python bytecode caches
 __pycache__/
 *.pyc
+
+# Editor swap files -- a stray one (vim, another machine/user entirely) was
+# accidentally committed upstream and carried along into this repo; ignore
+# the pattern so it can't happen again from any editor.
+*.swp
+*.swo
+*~
 
 # Local Claude Code settings (personal, not shared)
 .claude/settings.local.json
