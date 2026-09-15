@@ -51,6 +51,16 @@ case "$ODOM_BACKEND" in
         ;;
 esac
 
+# office_fastlio.rviz swaps which backend's accumulated-map display is
+# enabled (FastLioMap vs. KissIcpLocalMap) -- each backend only publishes its
+# own map topic, so the "other" display would just sit empty otherwise.
+GO2_NAV_BRINGUP_SHARE="$(ros2 pkg prefix go2_nav_bringup)/share/go2_nav_bringup"
+if [ "$ODOM_BACKEND" = "fast_lio" ]; then
+    RVIZ_CONFIG="$GO2_NAV_BRINGUP_SHARE/config/office_fastlio.rviz"
+else
+    RVIZ_CONFIG="$GO2_NAV_BRINGUP_SHARE/config/office.rviz"
+fi
+
 # "ros2 launch go2_nav_bringup", not bare "go2_nav_bringup": this script's own
 # path (.../scripts/run_stack.sh) contains the substring "go2_nav_bringup" too
 # -- pkill/pgrep only ever auto-exclude their own PID, not an ancestor script
@@ -130,7 +140,7 @@ GAZEBO_PID="$!"
 sleep 1
 
 echo "==> Launching rviz.launch.py..."
-ros2 launch go2_nav_bringup rviz.launch.py &
+ros2 launch go2_nav_bringup rviz.launch.py rviz_config:="$RVIZ_CONFIG" &
 PIDS+=("$!")
 RVIZ_PID="$!"
 

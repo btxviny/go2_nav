@@ -35,6 +35,7 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
   scan_lidar_pub_en_ = declare_parameter<bool>("publish.scan_lidarframe_pub_en", false);
   scan_body_pub_en_  = declare_parameter<bool>("publish.scan_bodyframe_pub_en", false);
   scan_base_pub_en_  = declare_parameter<bool>("publish.scan_baseframe_pub_en", false);
+  local_map_pub_en_  = declare_parameter<bool>("publish.local_map_pub_en", false);
 
   NUM_MAX_ITERATIONS_ = declare_parameter<int>("max_iteration", 4);
 
@@ -108,6 +109,7 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
   pub_cloud_lidar_ = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_lidar", qos);
   pub_cloud_body_  = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_body", qos);
   pub_cloud_base_  = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_base", qos);
+  pub_local_map_   = create_publisher<sensor_msgs::msg::PointCloud2>("fastlio/local_map", qos);
 
   pub_odom_                 = create_publisher<nav_msgs::msg::Odometry>("odometry", qos);
   pub_path_                 = create_publisher<nav_msgs::msg::Path>("path", qos);
@@ -841,6 +843,37 @@ void SPARKFastLIO2::publishFrameWorld(
   }
 }
 
+// Added for this project's go2_nav integration (not upstream). ikd_tree_ is
+// already the exact kind of accumulated, voxel-deduplicated map KISS-ICP's
+// own kiss/local_map republishes -- mapIncremental() (called just before this
+// in processLidarAndImu) inserts every new scan into it via Add_Points'
+// per-voxel dedup logic, and the tree itself never grows past
+// cube_side_length around the current position (lasermapFovSegment()). It was
+// previously only used internally for ICP correspondence search and never
+// published anywhere. flatten() walks the whole tree and returns every
+// currently-live point (NOT_RECORD: don't also bother collecting the
+// separate deleted-points list, which publishLocalMap has no use for).
+void SPARKFastLIO2::publishLocalMap() {
+  if (!local_map_pub_en_ || ikd_tree_.Root_Node == nullptr) {
+    return;
+  }
+
+  PointVector local_map_points;
+  ikd_tree_.flatten(ikd_tree_.Root_Node, local_map_points, NOT_RECORD);
+
+  PointCloudXYZI::Ptr local_map_cloud(new PointCloudXYZI());
+  local_map_cloud->points = local_map_points;
+  local_map_cloud->width  = local_map_points.size();
+  local_map_cloud->height = 1;
+  local_map_cloud->is_dense = false;
+
+  sensor_msgs::msg::PointCloud2 cloud_msg;
+  pcl::toROSMsg(*local_map_cloud, cloud_msg);
+  cloud_msg.header.stamp    = rclcpp::Time(lidar_end_time_ * 1e9);
+  cloud_msg.header.frame_id = map_frame_;
+  pub_local_map_->publish(cloud_msg);
+}
+
 void SPARKFastLIO2::publishFrame(
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud,
     const std::string &frame) {
@@ -1146,6 +1179,7 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
     if (scan_body_pub_en_) publishFrame(pub_cloud_body_, "imu");
     if (scan_base_pub_en_) publishFrame(pub_cloud_base_, "base");
   }
+  publishLocalMap();
 }
 }  // namespace spark_fast_lio
 

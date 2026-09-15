@@ -71,6 +71,14 @@
       scan_publish_en: true
       dense_publish_en: false
       scan_bodyframe_pub_en: false
+      # Publishes a flattened snapshot of ikd_tree_ (see publishLocalMap() in
+      # spark_fast_lio.cpp) -- the same voxel-deduplicated, bounded
+      # accumulated map used internally for ICP correspondence, republished
+      # as its own topic (local_map, i.e. /robot1/fastlio/local_map). This is
+      # the equivalent of KISS-ICP's own kiss/local_map: a real accumulated
+      # map, not RViz faking accumulation by retaining every raw
+      # cloud_registered scan.
+      local_map_pub_en: true
 
     max_iteration: 4
     verbose: false

@@ -39,11 +39,12 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 def generate_launch_description():
     office_share = get_package_share_directory('go2_nav_bringup')
 
-    def include(launch_file_name):
+    def include(launch_file_name, launch_arguments=None):
         return IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(office_share, 'launch', launch_file_name)
-            )
+            ),
+            launch_arguments=(launch_arguments or {}).items(),
         )
 
     def launch_odom(context, *args, **kwargs):
@@ -51,10 +52,19 @@ def generate_launch_description():
         filename = 'fast_lio.launch.py' if backend == 'fast_lio' else 'kiss_icp.launch.py'
         return [include(filename)]
 
+    def launch_rviz(context, *args, **kwargs):
+        # office_fastlio.rviz swaps which backend's accumulated-map display
+        # is enabled (FastLioMap vs. KissIcpLocalMap) -- see run_stack.sh's
+        # matching RVIZ_CONFIG selection.
+        backend = context.launch_configurations['odom_backend']
+        config_name = 'office_fastlio.rviz' if backend == 'fast_lio' else 'office.rviz'
+        config_path = os.path.join(office_share, 'config', config_name)
+        return [include('rviz.launch.py', {'rviz_config': config_path})]
+
     declare_odom_backend = DeclareLaunchArgument('odom_backend', default_value='kiss_icp')
 
     office_sim = include('office_sim.launch.py')
-    rviz = TimerAction(period=1.0, actions=[include('rviz.launch.py')])
+    rviz = TimerAction(period=1.0, actions=[OpaqueFunction(function=launch_rviz)])
     odom = TimerAction(period=6.0, actions=[OpaqueFunction(function=launch_odom)])
     nav_stack = TimerAction(period=11.0, actions=[include('nav_stack.launch.py')])
 
