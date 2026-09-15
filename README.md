@@ -44,10 +44,12 @@ source ~/go2_nav/install/setup.bash
 
 Starts everything — simulation, odometry, SLAM/Nav2, and RViz — in the right order with
 the right delays between them, and cleans up any leftover processes from a previous run
-first:
+first. `--odom` picks the lidar odometry backend (default `kiss_icp`; `fast_lio` runs
+`spark_fast_lio` instead — see the Layout section and Launch commands table below):
 
 ```bash
 ./src/go2_nav_bringup/scripts/run_stack.sh
+./src/go2_nav_bringup/scripts/run_stack.sh --odom fast_lio
 ```
 
 **Want more control?** Run each piece in its own terminal so you can restart just one
@@ -61,6 +63,7 @@ ros2 launch go2_nav_bringup office_sim.launch.py
 # Terminal 2 — lidar odometry (start this before SLAM/Nav2)
 source ~/go2_nav/install/setup.bash
 ros2 launch go2_nav_bringup kiss_icp.launch.py
+# (or fast_lio.launch.py — see Launch commands table below)
 
 # Terminal 3 — SLAM + Nav2
 source ~/go2_nav/install/setup.bash
@@ -85,7 +88,7 @@ load — give Terminals 1-2 a few seconds to settle first.
 **Starting over cleanly:** if something's stuck (a launch died halfway, a stale process is
 holding a topic), kill everything project-related before relaunching:
 ```bash
-pkill -9 -f "gz sim|ros_gz_bridge|quadruped_controller/lib|go2_nav_bringup|kiss_icp_node|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager"
+pkill -9 -f "gz sim|ros_gz_bridge|quadruped_controller/lib|go2_nav_bringup|kiss_icp_node|spark_lio_mapping|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager"
 ```
 
 ---
@@ -101,7 +104,8 @@ go2_nav/
 │   ├── go2_description/    Go2 URDF/xacro — vendored + patched
 │   ├── quadruped_controller/  IK trot-gait controller — vendored + patched
 │   ├── quadruped_msgs/    custom msg/srv types for the controller — vendored, unpatched
-│   └── kiss-icp/           lidar-only odometry (git submodule, unpatched)
+│   ├── kiss-icp/           lidar-only odometry, the default (git submodule, unpatched)
+│   └── spark-fast-lio/     LiDAR-IMU ESKF odometry, alternative to kiss-icp (vendored + patched)
 ├── docs/                   architecture, navigation, patches, known issues, media
 ├── bags/                   rosbag output directory
 └── install/ build/ log/    colcon artifacts (generated, not source)
@@ -140,11 +144,12 @@ still not installed (nothing here needs it).
 
 | Command | What it does | Status |
 |---|---|---|  
-| `ros2 launch go2_nav_bringup full_stack.launch.py` | Everything in one command — office_sim + rviz + kiss_icp + nav_stack, staggered | ✅ |
+| `ros2 launch go2_nav_bringup full_stack.launch.py [odom_backend:=fast_lio]` | Everything in one command — office_sim + rviz + odometry + nav_stack, staggered (odom_backend default `kiss_icp`) | ✅ |
 | `ros2 launch go2_nav_bringup office_sim.launch.py` | Spawns the office world + Go2 with sensors and locomotion | ✅ |
 | `python3 ~/go2_nav/src/go2_nav_bringup/scripts/keyboard_teleop.py` | WASD + arrow-key teleop (needs its own terminal, keyboard focus) | ✅ |
 | `ros2 launch go2_nav_bringup rviz.launch.py` | RViz — robot model, camera, map, costmaps, odom trajectory, "2D Nav Goal" tool | ✅ |
-| `ros2 launch go2_nav_bringup kiss_icp.launch.py` | KISS-ICP odometry — the real `/robot1/odom` + `odom->base_link` TF source | ✅ |
+| `ros2 launch go2_nav_bringup kiss_icp.launch.py` | KISS-ICP odometry — the default `/robot1/odom` + `odom->base_link` TF source | ✅ |
+| `ros2 launch go2_nav_bringup fast_lio.launch.py` | spark_fast_lio (FAST-LIO2) odometry — alternative `/robot1/odom` + `odom->base_link` TF source | ✅ |
 | `ros2 launch go2_nav_bringup nav_stack.launch.py` | SLAM + pointcloud_to_laserscan + Nav2 | ✅ |
 | `python3 ~/go2_nav/src/go2_nav_bringup/scripts/send_nav_goal.py --x <x> --y <y>` | Send a one-off Nav2 goal from the CLI (`ros2 action` isn't installed) | ✅ |
 | `blender -b blender/office.blend --python blender/export_sdf.py` | Re-export the scene after editing it in Blender | ✅ |

@@ -1,12 +1,16 @@
-"""The entire stack (office_sim + rviz + kiss_icp + nav_stack) via one `ros2 launch`,
+"""The entire stack (office_sim + rviz + odometry + nav_stack) via one `ros2 launch`,
 instead of running scripts/run_stack.sh or four separate terminal commands.
 
 Staggers the four includes with the same timing run_stack.sh uses (office_sim at
-t=0, rviz at t=1s, kiss_icp at t=6s, nav_stack at t=11s) so each stage gets a
-chance to settle before the next depends on it -- see run_stack.sh's own
-comments for why those specific gaps (RViz needs Gazebo's GL context grabbed
-first; kiss_icp/nav_stack both need the robot settled and odom->base_link
-already flowing).
+t=0, rviz at t=1s, the selected odometry backend at t=6s, nav_stack at t=11s) so
+each stage gets a chance to settle before the next depends on it -- see
+run_stack.sh's own comments for why those specific gaps (RViz needs Gazebo's GL
+context grabbed first; the odometry backend/nav_stack both need the robot settled
+and odom->base_link already flowing).
+
+`odom_backend` (default 'kiss_icp', or 'fast_lio') picks between
+kiss_icp.launch.py and fast_lio.launch.py, same as run_stack.sh's --odom flag:
+  ros2 launch go2_nav_bringup full_stack.launch.py odom_backend:=fast_lio
 
 **Not a full replacement for run_stack.sh** -- this file intentionally does
 NOT replicate two things that script does in bash:
@@ -28,23 +32,40 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 def generate_launch_description():
     office_share = get_package_share_directory('go2_nav_bringup')
 
-    def include(launch_file_name):
+    def include(launch_file_name, launch_arguments=None):
         return IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(office_share, 'launch', launch_file_name)
-            )
+            ),
+            launch_arguments=(launch_arguments or {}).items(),
         )
 
+    def launch_odom(context, *args, **kwargs):
+        backend = context.launch_configurations['odom_backend']
+        filename = 'fast_lio.launch.py' if backend == 'fast_lio' else 'kiss_icp.launch.py'
+        return [include(filename)]
+
+    def launch_rviz(context, *args, **kwargs):
+        # office_fastlio.rviz swaps which backend's accumulated-map display
+        # is enabled (FastLioGlobalMap vs. KissIcpLocalMap) -- see run_stack.sh's
+        # matching RVIZ_CONFIG selection.
+        backend = context.launch_configurations['odom_backend']
+        config_name = 'office_fastlio.rviz' if backend == 'fast_lio' else 'office.rviz'
+        config_path = os.path.join(office_share, 'config', config_name)
+        return [include('rviz.launch.py', {'rviz_config': config_path})]
+
+    declare_odom_backend = DeclareLaunchArgument('odom_backend', default_value='kiss_icp')
+
     office_sim = include('office_sim.launch.py')
-    rviz = TimerAction(period=1.0, actions=[include('rviz.launch.py')])
-    kiss_icp = TimerAction(period=6.0, actions=[include('kiss_icp.launch.py')])
+    rviz = TimerAction(period=1.0, actions=[OpaqueFunction(function=launch_rviz)])
+    odom = TimerAction(period=6.0, actions=[OpaqueFunction(function=launch_odom)])
     nav_stack = TimerAction(period=11.0, actions=[include('nav_stack.launch.py')])
 
-    return LaunchDescription([office_sim, rviz, kiss_icp, nav_stack])
+    return LaunchDescription([declare_odom_backend, office_sim, rviz, odom, nav_stack])

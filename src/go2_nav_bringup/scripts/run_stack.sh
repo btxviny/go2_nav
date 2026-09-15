@@ -17,10 +17,49 @@
 # to an essentially perfectly level pose within about 1-2s. 5s here is just a
 # safety margin over that, not a tip-over workaround anymore.
 #
-# Usage: ~/go2_nav/src/go2_nav_bringup/scripts/run_stack.sh
+# Usage: ~/go2_nav/src/go2_nav_bringup/scripts/run_stack.sh [--odom kiss_icp|fast_lio]
+# --odom picks the lidar odometry backend (default: kiss_icp). fast_lio is
+# spark_fast_lio (FAST-LIO2, tightly-coupled LiDAR-IMU ESKF) -- see
+# launch/fast_lio.launch.py for why it's an alternative rather than the default.
 # Ctrl+C stops everything this script started.
 
 set -u
+
+ODOM_BACKEND="kiss_icp"
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --odom)
+            ODOM_BACKEND="$2"
+            shift 2
+            ;;
+        --odom=*)
+            ODOM_BACKEND="${1#--odom=}"
+            shift
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            echo "Usage: $0 [--odom kiss_icp|fast_lio]" >&2
+            exit 1
+            ;;
+    esac
+done
+case "$ODOM_BACKEND" in
+    kiss_icp|fast_lio) ;;
+    *)
+        echo "Invalid --odom value '$ODOM_BACKEND' (expected kiss_icp or fast_lio)" >&2
+        exit 1
+        ;;
+esac
+
+# office_fastlio.rviz swaps which backend's accumulated-map display is
+# enabled (FastLioGlobalMap vs. KissIcpLocalMap) -- each backend only publishes its
+# own map topic, so the "other" display would just sit empty otherwise.
+GO2_NAV_BRINGUP_SHARE="$(ros2 pkg prefix go2_nav_bringup)/share/go2_nav_bringup"
+if [ "$ODOM_BACKEND" = "fast_lio" ]; then
+    RVIZ_CONFIG="$GO2_NAV_BRINGUP_SHARE/config/office_fastlio.rviz"
+else
+    RVIZ_CONFIG="$GO2_NAV_BRINGUP_SHARE/config/office.rviz"
+fi
 
 # "ros2 launch go2_nav_bringup", not bare "go2_nav_bringup": this script's own
 # path (.../scripts/run_stack.sh) contains the substring "go2_nav_bringup" too
@@ -28,7 +67,7 @@ set -u
 # that invoked them, so a bare "go2_nav_bringup" term matched and killed this
 # very script the moment it ran (confirmed live: printed "Killed" and exited
 # right after the cleanup step, before launching anything).
-PROJECT_PROCS="gz sim|ros_gz_bridge|quadruped_controller/lib|ros2 launch go2_nav_bringup|kiss_icp_node|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager"
+PROJECT_PROCS="gz sim|ros_gz_bridge|quadruped_controller/lib|ros2 launch go2_nav_bringup|kiss_icp_node|spark_lio_mapping|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager"
 
 # Belt-and-suspenders on top of the narrowed pattern above: explicitly never
 # kill this script's own PID, in case a future pattern term accidentally
@@ -101,7 +140,7 @@ GAZEBO_PID="$!"
 sleep 1
 
 echo "==> Launching rviz.launch.py..."
-ros2 launch go2_nav_bringup rviz.launch.py &
+ros2 launch go2_nav_bringup rviz.launch.py rviz_config:="$RVIZ_CONFIG" &
 PIDS+=("$!")
 RVIZ_PID="$!"
 
@@ -109,12 +148,17 @@ echo "==> Waiting 5s for the robot to settle and Gazebo/RViz to finish starting.
 sleep 5
 require_alive "office_sim.launch.py" "$GAZEBO_PID" "rviz.launch.py" "$RVIZ_PID"
 
-echo "==> Launching kiss_icp.launch.py..."
-ros2 launch go2_nav_bringup kiss_icp.launch.py &
+if [ "$ODOM_BACKEND" = "fast_lio" ]; then
+    echo "==> Launching fast_lio.launch.py..."
+    ros2 launch go2_nav_bringup fast_lio.launch.py &
+else
+    echo "==> Launching kiss_icp.launch.py..."
+    ros2 launch go2_nav_bringup kiss_icp.launch.py &
+fi
 PIDS+=("$!")
-KISS_ICP_PID="$!"
+ODOM_PID="$!"
 sleep 5
-require_alive "kiss_icp.launch.py" "$KISS_ICP_PID"
+require_alive "odometry ($ODOM_BACKEND)" "$ODOM_PID"
 
 echo "==> Launching nav_stack.launch.py..."
 ros2 launch go2_nav_bringup nav_stack.launch.py &
