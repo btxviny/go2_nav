@@ -9,9 +9,12 @@ point-to-point navigation both work** (KISS-ICP drives the real odometry — see
 [Navigation](docs/ARCHITECTURE.md#kiss-icp-real-odom-source)); you can send it a goal by
 clicking in RViz or from the command line (see
 [Navigation](docs/ARCHITECTURE.md#nav2-point-to-point-navigation)). Fully
-autonomous frontier exploration (the robot picking its own goals to map the whole scene
-unattended) is not implemented yet — see [Known issues](docs/KNOWN_ISSUES.md) for that and
-for an open gait-stability bug.
+autonomous frontier exploration (the robot picking its own goals via Wavefront Frontier
+Detection to map the whole scene unattended) **works too** — run
+`ros2 launch go2_nav_bringup frontier_explorer.launch.py` once Nav2 is active (see the Launch
+commands table below), or `run_stack.sh --explore`. There's still an open gait-stability bug
+where the robot can tip itself over a few seconds after standing — worth knowing about before
+an unattended exploration run.
 
 <p align="center">
   <img src="docs/media/kiss_icp_pointcloud_overview.png" alt="Office point cloud KISS-ICP has accumulated, top-down" width="49%">
@@ -151,6 +154,7 @@ still not installed (nothing here needs it).
 | `ros2 launch go2_nav_bringup kiss_icp.launch.py` | KISS-ICP odometry — the default `/robot1/odom` + `odom->base_link` TF source | ✅ |
 | `ros2 launch go2_nav_bringup fast_lio.launch.py` | spark_fast_lio (FAST-LIO2) odometry — alternative `/robot1/odom` + `odom->base_link` TF source | ✅ |
 | `ros2 launch go2_nav_bringup nav_stack.launch.py` | SLAM + pointcloud_to_laserscan + Nav2 | ✅ |
+| `ros2 launch go2_nav_bringup frontier_explorer.launch.py` | Autonomous frontier exploration (Wavefront Frontier Detection) — no teleop needed; run once Nav2 is active | ✅ |
 | `python3 ~/go2_nav/src/go2_nav_bringup/scripts/send_nav_goal.py --x <x> --y <y>` | Send a one-off Nav2 goal from the CLI (`ros2 action` isn't installed) | ✅ |
 | `blender -b blender/office.blend --python blender/export_sdf.py` | Re-export the scene after editing it in Blender | ✅ |
 | `blender -b --python blender/build_office.py` | Regenerate the scene from scratch — **overwrites `office.blend`** | ✅ |

@@ -2,23 +2,29 @@
 """Autonomous frontier exploration for the Go2, driven entirely through Nav2.
 
 No teleop, no manually-placed goals: reads /robot1/map (slam_toolbox's live occupancy
-grid), finds the boundary between known-free and unknown space, and repeatedly sends
-Nav2 the nearest reachable frontier as a NavigateToPose goal until the map stops
-growing (no frontiers left) or a time/attempt budget runs out. Full design writeup in
+grid), finds the boundary between known-free and unknown space via Wavefront Frontier
+Detection (see find_frontiers()'s docstring), and repeatedly sends Nav2 the nearest
+reachable frontier as a NavigateToPose goal until the map stops growing (no frontiers
+left) or a time/attempt budget runs out. Full design writeup in
 docs/autonomous_exploration_plan.adoc and the project plan this was built from.
+
+This is a ros2-launch-only node, not a standalone script -- frontier_explorer.launch.py
+owns namespacing and /tf, /tf_static remapping (same division of responsibility as
+slam_toolbox/kiss_icp_node; see that launch file's docstring), so running this directly
+via `python3 <path>` will come up unnamespaced against the root /tf tree instead.
 
 Run alongside office_sim.launch.py + kiss_icp.launch.py + nav_stack.launch.py (KISS-ICP
 must be up first -- it's the real odom source, see README's KISS-ICP section):
 
-    python3 ~/go2_nav/src/go2_nav_bringup/scripts/frontier_explorer.py
+    ros2 launch go2_nav_bringup frontier_explorer.launch.py
 """
 import math
 import time
+from collections import deque
 
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter import Parameter
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import PoseStamped
@@ -110,21 +116,16 @@ UNSTUCK_SPIN_DIST_RAD = math.pi  # full 180 -- a fresh look at the surroundings
 class MapTF(Node):
     """Holds the latest occupancy grid and a map->base_link TF lookup.
 
-    A separate small node rather than reusing BasicNavigator's own node: this script
-    runs via `python3 <path>` (project convention -- ros2 run isn't installed here),
-    so there's no launch file to remap /tf/-> /robot1/tf the way rviz.launch.py and
-    every other launch file in this project already have to. tf2_ros.TransformListener
-    always listens on the literal absolute /tf and /tf_static topics regardless of
-    node namespace, so the equivalent fix here is cli_args.
+    A separate small node rather than reusing BasicNavigator's own node, purely so this
+    file has one obvious place to hold latest_map + the TF buffer. Namespacing and the
+    /tf, /tf_static remap (tf2_ros.TransformListener always listens on the literal
+    absolute /tf/tf_static topics regardless of node namespace) are both handled by
+    frontier_explorer.launch.py's GroupAction/PushRosNamespace/SetRemap wrapper now,
+    not here -- see this module's docstring.
     """
 
     def __init__(self):
-        super().__init__(
-            'frontier_explorer_tf',
-            namespace='/robot1',
-            cli_args=['--ros-args', '-r', '/tf:=/robot1/tf', '-r', '/tf_static:=/robot1/tf_static'],
-        )
-        self.set_parameters([Parameter('use_sim_time', Parameter.Type.BOOL, True)])
+        super().__init__('frontier_explorer_tf')
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.latest_map = None
@@ -138,87 +139,149 @@ class MapTF(Node):
         return t.transform.translation.x, t.transform.translation.y
 
 
-def find_frontiers(grid: OccupancyGrid):
-    """Free cells 8-connected to an unknown cell, clustered, as (x, y, yaw) goals.
+SEED_SEARCH_RADIUS_CELLS = 15  # ~0.75m at this stack's 0.05m map resolution
 
-    yaw points from each cluster's centroid toward its own unknown side (the
-    mean direction, over every frontier cell in the cluster, to the unknown
-    neighbor cells it borders) -- i.e. "into" the unexplored region, not just
-    an arbitrary/identity orientation. This matters because the head-mounted
-    RGBD camera is forward-facing (base_link +X) while the lidar is a 360
-    degree sensor mounted on the back -- lidar coverage barely depends on
-    which way the robot is pointed, but arriving at a frontier facing the
-    wrong way means the camera looks at already-known space or a wall while
-    the one direction it needed to see (the unknown side that made this a
-    frontier in the first place) is behind it. Facing the unknown-ward
-    direction maximizes what the camera actually captures on arrival.
+
+def world_to_grid(grid: OccupancyGrid, x, y):
+    """Map-frame (x, y) -> (row, col) grid indices, per OccupancyGrid.info."""
+    col = int((x - grid.info.origin.position.x) / grid.info.resolution)
+    row = int((y - grid.info.origin.position.y) / grid.info.resolution)
+    return row, col
+
+
+def _nearest_free_cell(free, row, col):
+    """(row, col) if free, else the nearest free cell within SEED_SEARCH_RADIUS_CELLS.
+
+    WFD needs a free cell to seed its outer BFS from. The robot's own map cell can
+    legitimately not be `free` at the instant this runs -- self-hit lidar noise from the
+    walking gait (see README) can leave a small halo of occupied/unknown cells right
+    around the robot even while it's plainly standing on real free space -- so search
+    outward in expanding rings rather than assuming the exact cell is usable.
+    """
+    h, w = free.shape
+    if 0 <= row < h and 0 <= col < w and free[row, col]:
+        return row, col
+    for r in range(1, SEED_SEARCH_RADIUS_CELLS + 1):
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if max(abs(dy), abs(dx)) != r:
+                    continue  # only the newly-added ring at this radius
+                ny, nx = row + dy, col + dx
+                if 0 <= ny < h and 0 <= nx < w and free[ny, nx]:
+                    return ny, nx
+    return None
+
+
+def find_frontiers(grid: OccupancyGrid, robot_rc):
+    """Wavefront Frontier Detection (WFD), seeded at the robot's own map cell.
+
+    Two-pass BFS per Topiwala/Inani/Kathpal, "Frontier Based Exploration for Autonomous
+    Robot" (arXiv:1806.03581) -- the same paper nav2_wfd
+    (github.com/SeanReg/nav2_wavefront_frontier_exploration) implements. An outer BFS
+    ("Map-Open/Close-List") floods known-free space reachable from the robot; whenever it
+    reaches a free cell touching unknown space, an inner BFS ("Frontier-Open/Close-List")
+    floods the whole contiguous frontier region from there, in one pass, before the outer
+    BFS continues.
+
+    This only ever proposes frontiers in the free-space component the robot can *actually
+    reach right now*, per the current map -- a disconnected "free" blob from sensor noise
+    across a wall (or behind a still-unopened door) can never surface as a candidate here,
+    unlike the previous whole-grid scan (which found every frontier-looking cell
+    regardless of reachability and relied on choose_goal()'s Nav2 getPath() call to reject
+    unreachable ones after the fact -- still useful as a second check against costmap
+    inflation the raw SLAM grid doesn't reflect, but no longer the *only* reachability
+    check). Cost also scales with reachable free space + frontier cells actually touching
+    it, not the whole grid array -- matters once the explored area is a small fraction of
+    a large map.
+
+    yaw points from each cluster's centroid toward its own unknown side (the mean
+    direction, over every frontier cell in the cluster, to the unknown neighbor cells it
+    borders) -- i.e. "into" the unexplored region, not just an arbitrary/identity
+    orientation. This matters because the head-mounted RGBD camera is forward-facing
+    (base_link +X) while the lidar is a 360 degree sensor mounted on the back -- lidar
+    coverage barely depends on which way the robot is pointed, but arriving at a frontier
+    facing the wrong way means the camera looks at already-known space or a wall while the
+    one direction it needed to see (the unknown side that made this a frontier in the
+    first place) is behind it. Facing the unknown-ward direction maximizes what the camera
+    actually captures on arrival.
     """
     w, h = grid.info.width, grid.info.height
     data = np.array(grid.data, dtype=np.int8).reshape(h, w)
     free = (data >= 0) & (data <= FREE_MAX)
     unknown = data == UNKNOWN
 
-    frontier = np.zeros_like(free)
-    # accumulate, per free cell, the sum of (dx, dy) offsets to each unknown
-    # neighbor it borders -- reused below to get each cluster's unknown-ward
-    # direction without a second full pass over the grid.
-    dir_x = np.zeros((h, w), dtype=np.float64)
-    dir_y = np.zeros((h, w), dtype=np.float64)
-    for dy in (-1, 0, 1):
-        for dx in (-1, 0, 1):
-            if dx == 0 and dy == 0:
-                continue
-            shifted_unknown = np.roll(np.roll(unknown, dy, axis=0), dx, axis=1)
-            hit = free & shifted_unknown
-            frontier |= hit
-            # np.roll(arr, shift)[i] == arr[i - shift], so a hit here means
-            # the real unknown neighbor sits at offset (-dx, -dy) from this
-            # free cell, not (dx, dy) -- confirmed by a unit test that first
-            # caught this backwards (goals faced the known side, not the
-            # unknown one -- exactly the "wall in front of the camera" bug).
-            dir_x[hit] += -dx
-            dir_y[hit] += -dy
-    # np.roll wraps around at the edges -- zero those out so we don't treat a
-    # wrap-around artifact as a real frontier cell.
-    frontier[0, :] = False
-    frontier[-1, :] = False
-    frontier[:, 0] = False
-    frontier[:, -1] = False
+    def neighbors8(y, x):
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < h and 0 <= nx < w:
+                    yield ny, nx
 
-    visited = np.zeros_like(frontier)
+    def is_frontier_point(y, x):
+        return bool(free[y, x]) and any(unknown[ny, nx] for ny, nx in neighbors8(y, x))
+
+    seed = _nearest_free_cell(free, *robot_rc)
+    if seed is None:
+        return []
+
+    map_open = np.zeros((h, w), dtype=bool)
+    map_close = np.zeros((h, w), dtype=bool)
+    frontier_open = np.zeros((h, w), dtype=bool)
+    frontier_close = np.zeros((h, w), dtype=bool)
+
     clusters = []
-    for y, x in zip(*np.where(frontier)):
-        if visited[y, x]:
+    outer_queue = deque([seed])
+    map_open[seed] = True
+    while outer_queue:
+        y, x = outer_queue.popleft()
+        if map_close[y, x]:
             continue
-        stack = [(y, x)]
-        visited[y, x] = True
-        cells = []
-        while stack:
-            cy, cx = stack.pop()
-            cells.append((cy, cx))
-            for dy in (-1, 0, 1):
-                for dx in (-1, 0, 1):
-                    ny, nx = cy + dy, cx + dx
-                    if 0 <= ny < h and 0 <= nx < w and frontier[ny, nx] and not visited[ny, nx]:
-                        visited[ny, nx] = True
-                        stack.append((ny, nx))
-        if len(cells) < MIN_FRONTIER_CELLS:
-            continue
-        ys, xs = zip(*cells)
-        cy, cx = sum(ys) / len(ys), sum(xs) / len(xs)
-        wx = grid.info.origin.position.x + (cx + 0.5) * grid.info.resolution
-        wy = grid.info.origin.position.y + (cy + 0.5) * grid.info.resolution
-        if not (BUILDING_BOUNDS_X[0] <= wx <= BUILDING_BOUNDS_X[1]
-                and BUILDING_BOUNDS_Y[0] <= wy <= BUILDING_BOUNDS_Y[1]):
-            continue  # outside the building -- see BUILDING_BOUNDS_* comment
-        # mean unknown-ward direction over the whole cluster; grid rows are
-        # y, columns are x, and world x/y share the grid's own axis sense
-        # (only the resolution/origin differ), so summing dir_x/dir_y over
-        # the cluster's cells already gives a usable world-frame direction.
-        sum_dx = sum(dir_x[cy_, cx_] for cy_, cx_ in cells)
-        sum_dy = sum(dir_y[cy_, cx_] for cy_, cx_ in cells)
-        yaw = math.atan2(sum_dy, sum_dx) if (sum_dx or sum_dy) else 0.0
-        clusters.append((wx, wy, yaw))
+        map_close[y, x] = True
+
+        if is_frontier_point(y, x) and not frontier_open[y, x] and not frontier_close[y, x]:
+            # Inner BFS: flood the whole contiguous frontier region touching (y, x),
+            # accumulating each cell's own unknown-neighbor offsets as we go (same
+            # dir_x/dir_y-summing idea the previous whole-grid version used, just done
+            # inline instead of as a separate array pass).
+            cells = []
+            dir_x_sum = dir_y_sum = 0.0
+            inner_queue = deque([(y, x)])
+            frontier_open[y, x] = True
+            while inner_queue:
+                fy, fx = inner_queue.popleft()
+                if frontier_close[fy, fx]:
+                    continue
+                frontier_close[fy, fx] = True
+                cells.append((fy, fx))
+                for ny, nx in neighbors8(fy, fx):
+                    if unknown[ny, nx]:
+                        dir_x_sum += nx - fx
+                        dir_y_sum += ny - fy
+                    elif (is_frontier_point(ny, nx) and not frontier_open[ny, nx]
+                            and not frontier_close[ny, nx]):
+                        frontier_open[ny, nx] = True
+                        inner_queue.append((ny, nx))
+
+            if len(cells) >= MIN_FRONTIER_CELLS:
+                ys, xs = zip(*cells)
+                cy, cx = sum(ys) / len(ys), sum(xs) / len(xs)
+                wx = grid.info.origin.position.x + (cx + 0.5) * grid.info.resolution
+                wy = grid.info.origin.position.y + (cy + 0.5) * grid.info.resolution
+                if (BUILDING_BOUNDS_X[0] <= wx <= BUILDING_BOUNDS_X[1]
+                        and BUILDING_BOUNDS_Y[0] <= wy <= BUILDING_BOUNDS_Y[1]):
+                    yaw = math.atan2(dir_y_sum, dir_x_sum) if (dir_x_sum or dir_y_sum) else 0.0
+                    clusters.append((wx, wy, yaw))
+                # else: outside the building -- see BUILDING_BOUNDS_* comment
+
+        # Outer BFS only ever expands across free cells -- this is what bounds the whole
+        # search to the robot's currently-reachable free-space component.
+        for ny, nx in neighbors8(y, x):
+            if free[ny, nx] and not map_open[ny, nx] and not map_close[ny, nx]:
+                map_open[ny, nx] = True
+                outer_queue.append((ny, nx))
+
     return clusters
 
 
@@ -311,8 +374,7 @@ def main():
     rclpy.init()
     tf_node = MapTF()
 
-    nav = BasicNavigator(namespace='/robot1')
-    nav.set_parameters([Parameter('use_sim_time', Parameter.Type.BOOL, True)])
+    nav = BasicNavigator()
     # 'robot_localization' is the sentinel value that skips BasicNavigator's built-in
     # AMCL wait -- this stack has no amcl node at all (slam_toolbox runs continuously
     # instead), so the default would block here forever.
@@ -340,11 +402,9 @@ def main():
         if tf_node.latest_map is None:
             continue
 
-        clusters = find_frontiers(tf_node.latest_map)
-        if not clusters:
-            nav.get_logger().info('No frontiers left -- map fully explored.')
-            break
-
+        # robot_xy is needed before find_frontiers() now (it seeds the wavefront BFS at
+        # the robot's own map cell), not just for choose_goal() afterward -- so this TF
+        # lookup moved ahead of frontier detection.
         try:
             robot_xy = tf_node.robot_xy()
             tf_wait_since = None
@@ -380,6 +440,12 @@ def main():
                     f'{now - tf_wait_since:.0f}s: {exc}')
             time.sleep(0.5)
             continue
+
+        robot_rc = world_to_grid(tf_node.latest_map, robot_xy[0], robot_xy[1])
+        clusters = find_frontiers(tf_node.latest_map, robot_rc)
+        if not clusters:
+            nav.get_logger().info('No frontiers left -- map fully explored.')
+            break
 
         chosen = choose_goal(nav, clusters, robot_xy, blacklist, last_goal_xy)
         if chosen is None:

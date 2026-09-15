@@ -17,15 +17,20 @@
 # to an essentially perfectly level pose within about 1-2s. 5s here is just a
 # safety margin over that, not a tip-over workaround anymore.
 #
-# Usage: ~/go2_nav/src/go2_nav_bringup/scripts/run_stack.sh [--odom kiss_icp|fast_lio]
+# Usage: ~/go2_nav/src/go2_nav_bringup/scripts/run_stack.sh [--odom kiss_icp|fast_lio] [--explore]
 # --odom picks the lidar odometry backend (default: kiss_icp). fast_lio is
 # spark_fast_lio (FAST-LIO2, tightly-coupled LiDAR-IMU ESKF) -- see
 # launch/fast_lio.launch.py for why it's an alternative rather than the default.
+# --explore additionally launches frontier_explorer.launch.py after nav_stack comes up,
+# for unattended autonomous exploration instead of manual teleop. Off by default -- same
+# reasoning as everything else here defaulting to manual control: driving the robot
+# unattended is an opt-in choice, not the default.
 # Ctrl+C stops everything this script started.
 
 set -u
 
 ODOM_BACKEND="kiss_icp"
+EXPLORE=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --odom)
@@ -36,9 +41,13 @@ while [ "$#" -gt 0 ]; do
             ODOM_BACKEND="${1#--odom=}"
             shift
             ;;
+        --explore)
+            EXPLORE=1
+            shift
+            ;;
         *)
             echo "Unknown argument: $1" >&2
-            echo "Usage: $0 [--odom kiss_icp|fast_lio]" >&2
+            echo "Usage: $0 [--odom kiss_icp|fast_lio] [--explore]" >&2
             exit 1
             ;;
     esac
@@ -67,7 +76,7 @@ fi
 # that invoked them, so a bare "go2_nav_bringup" term matched and killed this
 # very script the moment it ran (confirmed live: printed "Killed" and exited
 # right after the cleanup step, before launching anything).
-PROJECT_PROCS="gz sim|ros_gz_bridge|quadruped_controller/lib|ros2 launch go2_nav_bringup|kiss_icp_node|spark_lio_mapping|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager"
+PROJECT_PROCS="gz sim|ros_gz_bridge|quadruped_controller/lib|ros2 launch go2_nav_bringup|kiss_icp_node|spark_lio_mapping|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager|frontier_explorer"
 
 # Belt-and-suspenders on top of the narrowed pattern above: explicitly never
 # kill this script's own PID, in case a future pattern term accidentally
@@ -166,6 +175,23 @@ PIDS+=("$!")
 NAV_STACK_PID="$!"
 sleep 2
 require_alive "nav_stack.launch.py" "$NAV_STACK_PID"
+
+if [ "$EXPLORE" -eq 1 ]; then
+    # 10s, not 2s like the others above: frontier_explorer.py's own
+    # waitUntilNav2Active() already blocks until Nav2's lifecycle nodes report
+    # active, but the map->base_link TF chain (kiss_icp + slam_toolbox) also
+    # needs its first few scans registered before there's anything to explore
+    # from -- giving nav_stack a real head start here avoids it just sitting
+    # in frontier_explorer's own TF-wait retry loop instead.
+    echo "==> Waiting 10s for Nav2/SLAM to settle before starting exploration..."
+    sleep 10
+    echo "==> Launching frontier_explorer.launch.py..."
+    ros2 launch go2_nav_bringup frontier_explorer.launch.py &
+    PIDS+=("$!")
+    EXPLORE_PID="$!"
+    sleep 2
+    require_alive "frontier_explorer.launch.py" "$EXPLORE_PID"
+fi
 
 echo "==> All launched. Ctrl+C to stop everything."
 wait
