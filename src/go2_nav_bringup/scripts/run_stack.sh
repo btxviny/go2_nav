@@ -52,7 +52,7 @@ case "$ODOM_BACKEND" in
 esac
 
 # office_fastlio.rviz swaps which backend's accumulated-map display is
-# enabled (FastLioMap vs. KissIcpLocalMap) -- each backend only publishes its
+# enabled (FastLioGlobalMap vs. KissIcpLocalMap) -- each backend only publishes its
 # own map topic, so the "other" display would just sit empty otherwise.
 GO2_NAV_BRINGUP_SHARE="$(ros2 pkg prefix go2_nav_bringup)/share/go2_nav_bringup"
 if [ "$ODOM_BACKEND" = "fast_lio" ]; then

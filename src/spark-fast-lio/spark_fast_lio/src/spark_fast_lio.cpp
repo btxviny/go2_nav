@@ -35,7 +35,7 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
   scan_lidar_pub_en_ = declare_parameter<bool>("publish.scan_lidarframe_pub_en", false);
   scan_body_pub_en_  = declare_parameter<bool>("publish.scan_bodyframe_pub_en", false);
   scan_base_pub_en_  = declare_parameter<bool>("publish.scan_baseframe_pub_en", false);
-  local_map_pub_en_  = declare_parameter<bool>("publish.local_map_pub_en", false);
+  global_map_pub_en_ = declare_parameter<bool>("publish.global_map_pub_en", false);
 
   NUM_MAX_ITERATIONS_ = declare_parameter<int>("max_iteration", 4);
 
@@ -109,7 +109,7 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
   pub_cloud_lidar_ = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_lidar", qos);
   pub_cloud_body_  = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_body", qos);
   pub_cloud_base_  = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered_base", qos);
-  pub_local_map_   = create_publisher<sensor_msgs::msg::PointCloud2>("fastlio/local_map", qos);
+  pub_global_map_  = create_publisher<sensor_msgs::msg::PointCloud2>("fastlio/global_map", qos);
 
   pub_odom_                 = create_publisher<nav_msgs::msg::Odometry>("odometry", qos);
   pub_path_                 = create_publisher<nav_msgs::msg::Path>("path", qos);
@@ -847,31 +847,37 @@ void SPARKFastLIO2::publishFrameWorld(
 // already the exact kind of accumulated, voxel-deduplicated map KISS-ICP's
 // own kiss/local_map republishes -- mapIncremental() (called just before this
 // in processLidarAndImu) inserts every new scan into it via Add_Points'
-// per-voxel dedup logic, and the tree itself never grows past
-// cube_side_length around the current position (lasermapFovSegment()). It was
-// previously only used internally for ICP correspondence search and never
-// published anywhere. flatten() walks the whole tree and returns every
-// currently-live point (NOT_RECORD: don't also bother collecting the
-// separate deleted-points list, which publishLocalMap has no use for).
-void SPARKFastLIO2::publishLocalMap() {
-  if (!local_map_pub_en_ || ikd_tree_.Root_Node == nullptr) {
+// per-voxel dedup logic. It was previously only used internally for ICP
+// correspondence search and never published anywhere. flatten() walks the
+// whole tree and returns every currently-live point (NOT_RECORD: don't also
+// bother collecting the separate deleted-points list, which
+// publishGlobalMap has no use for).
+//
+// Named "global", not "local": cube_side_length (fast_lio.yaml, 60.0) is set
+// well larger than this project's ~20x20m office, so lasermapFovSegment()'s
+// box-trim around the current position essentially never fires in practice
+// -- unlike KISS-ICP's own local_map (a small, continuously re-centered
+// window around the robot), this ends up holding everything explored so
+// far, i.e. a real global map for this environment.
+void SPARKFastLIO2::publishGlobalMap() {
+  if (!global_map_pub_en_ || ikd_tree_.Root_Node == nullptr) {
     return;
   }
 
-  PointVector local_map_points;
-  ikd_tree_.flatten(ikd_tree_.Root_Node, local_map_points, NOT_RECORD);
+  PointVector global_map_points;
+  ikd_tree_.flatten(ikd_tree_.Root_Node, global_map_points, NOT_RECORD);
 
-  PointCloudXYZI::Ptr local_map_cloud(new PointCloudXYZI());
-  local_map_cloud->points = local_map_points;
-  local_map_cloud->width  = local_map_points.size();
-  local_map_cloud->height = 1;
-  local_map_cloud->is_dense = false;
+  PointCloudXYZI::Ptr global_map_cloud(new PointCloudXYZI());
+  global_map_cloud->points   = global_map_points;
+  global_map_cloud->width    = global_map_points.size();
+  global_map_cloud->height   = 1;
+  global_map_cloud->is_dense = false;
 
   sensor_msgs::msg::PointCloud2 cloud_msg;
-  pcl::toROSMsg(*local_map_cloud, cloud_msg);
+  pcl::toROSMsg(*global_map_cloud, cloud_msg);
   cloud_msg.header.stamp    = rclcpp::Time(lidar_end_time_ * 1e9);
   cloud_msg.header.frame_id = map_frame_;
-  pub_local_map_->publish(cloud_msg);
+  pub_global_map_->publish(cloud_msg);
 }
 
 void SPARKFastLIO2::publishFrame(
@@ -1179,7 +1185,7 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
     if (scan_body_pub_en_) publishFrame(pub_cloud_body_, "imu");
     if (scan_base_pub_en_) publishFrame(pub_cloud_base_, "base");
   }
-  publishLocalMap();
+  publishGlobalMap();
 }
 }  // namespace spark_fast_lio
 

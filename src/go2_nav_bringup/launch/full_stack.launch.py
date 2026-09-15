@@ -54,7 +54,7 @@ def generate_launch_description():
 
     def launch_rviz(context, *args, **kwargs):
         # office_fastlio.rviz swaps which backend's accumulated-map display
-        # is enabled (FastLioMap vs. KissIcpLocalMap) -- see run_stack.sh's
+        # is enabled (FastLioGlobalMap vs. KissIcpLocalMap) -- see run_stack.sh's
         # matching RVIZ_CONFIG selection.
         backend = context.launch_configurations['odom_backend']
         config_name = 'office_fastlio.rviz' if backend == 'fast_lio' else 'office.rviz'

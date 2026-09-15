@@ -76,7 +76,7 @@ Visualization Manager:
       Enabled: true
       # KISS-ICP's own accumulated, voxel-deduplicated map (the point cloud
       # it registers each new scan against) -- see office_fastlio.rviz's
-      # FastLioMap for the equivalent under the --odom fast_lio backend.
+      # FastLioGlobalMap for the equivalent under the --odom fast_lio backend.
       #
       # Only published when kiss_icp.launch.py's publish_debug_clouds is on.
       Topic:

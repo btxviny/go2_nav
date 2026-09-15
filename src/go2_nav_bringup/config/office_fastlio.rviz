@@ -38,7 +38,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/PointCloud2
       Name: LidarPoints
       Enabled: false
-      # Off by default now that FastLioMap below shows the same lidar data
+      # Off by default now that FastLioGlobalMap below shows the same lidar data
       # accumulated into a real map -- flip this back on if you specifically
       # want to see raw single-scan points instead.
       Topic:
@@ -71,21 +71,22 @@ Visualization Manager:
         Axes Radius: 0.015
 
     - Class: rviz_default_plugins/PointCloud2
-      Name: FastLioMap
+      Name: FastLioGlobalMap
       Enabled: true
       # spark_fast_lio's own accumulated, voxel-deduplicated map -- a
       # flattened snapshot of its internal ikd_tree_ (the same structure it
       # uses for ICP correspondence search), republished as its own topic by
-      # this project's publishLocalMap() patch (see preprocess.h's GENERIC
+      # this project's publishGlobalMap() patch (see preprocess.h's GENERIC
       # lidar_type comment for the other go2_nav-specific patch in this
-      # package). Bounded the same way KISS-ICP's own kiss/local_map is
-      # (fast_lio.yaml's cube_side_length + filter_size_map), not an
-      # unbounded RViz-side pile of raw scans -- see office.rviz's
-      # KissIcpLocalMap for the kiss_icp equivalent.
+      # package). Named "global" rather than "local": fast_lio.yaml's
+      # cube_side_length (60.0) is well larger than this ~20x20m office, so
+      # this ends up holding everything explored so far rather than a small
+      # window re-centered on the robot the way KISS-ICP's own kiss/local_map
+      # is -- see office.rviz's KissIcpLocalMap for that equivalent.
       #
-      # Only published when fast_lio.yaml's publish.local_map_pub_en is on.
+      # Only published when fast_lio.yaml's publish.global_map_pub_en is on.
       Topic:
-        Value: /robot1/fastlio/local_map
+        Value: /robot1/fastlio/global_map
       Size (m): 0.02
       Style: Points
       Color Transformer: AxisColor

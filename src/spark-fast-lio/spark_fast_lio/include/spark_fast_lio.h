@@ -101,7 +101,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
   void publishFrame(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud,
                     const std::string &frame);
 
-  void publishLocalMap();
+  void publishGlobalMap();
 
   PoseStruct transformPoseWrtLidarFrame(const state_ikfom &state) const;
 
@@ -163,7 +163,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cloud_lidar_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cloud_body_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cloud_base_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_local_map_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_global_map_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_;
 
@@ -214,12 +214,17 @@ class SPARKFastLIO2 : public rclcpp::Node {
   bool scan_base_pub_en_  = false;
   // Added for this project's go2_nav integration (not upstream). Publishes a
   // flattened snapshot of ikd_tree_ -- the same voxel-deduplicated,
-  // bounded (by cube_side_length + filter_size_map) accumulated map used
-  // internally for ICP correspondence search -- as its own topic, so RViz has
-  // a real map display equivalent to KISS-ICP's own kiss/local_map instead of
-  // having to fake accumulation by retaining every raw /cloud_registered
-  // scan. See publishLocalMap().
-  bool local_map_pub_en_ = false;
+  // accumulated map used internally for ICP correspondence search -- as its
+  // own topic, so RViz has a real map display equivalent to KISS-ICP's own
+  // kiss/local_map instead of having to fake accumulation by retaining every
+  // raw /cloud_registered scan. Named "global", not "local", deliberately:
+  // cube_side_length (fast_lio.yaml, 60.0) is set well larger than this
+  // project's ~20x20m office, so lasermapFovSegment()'s box-trim essentially
+  // never fires in practice -- unlike KISS-ICP's own local_map (a small,
+  // continuously re-centered window around the robot), this ends up holding
+  // everything explored so far, i.e. a real global map for this environment.
+  // See publishGlobalMap().
+  bool global_map_pub_en_ = false;
 
   bool verbose_ = false;
   bool pcl_verbose_ = true;
