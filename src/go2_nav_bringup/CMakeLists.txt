@@ -13,6 +13,7 @@ install(DIRECTORY
 
 install(PROGRAMS
   scripts/frontier_explorer.py
+  scripts/coverage_tour.py
   scripts/record_bag.sh
   scripts/keyboard_teleop.py
   scripts/send_nav_goal.py

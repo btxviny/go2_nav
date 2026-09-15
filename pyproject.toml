@@ -1,0 +1,29 @@
+[project]
+name = "go2-nav-ml"
+version = "0.1.0"
+description = "Python dependency management for go2_nav's scripts (ROS deps come from --system-site-packages; this covers the semantic-navigation ML pipeline)"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.4",
+    "torchvision>=0.19",
+    "ultralytics>=8.3",
+    "open-clip-torch>=2.24",
+    "rosbags>=0.10",
+    "opencv-python-headless>=4.10",
+    "rerun-sdk>=0.20",
+    "matplotlib>=3.9",
+    # Pinned to match /opt/ros/jazzy's apt-provided numpy (1.26.4). Confirmed live:
+    # leaving this unpinned let uv resolve numpy 2.x into .venv's own
+    # site-packages, which (via --system-site-packages' load order) SHADOWS the
+    # compatible system numpy for every script, not just this package's own --
+    # including scripts this venv never touches directly. That silently broke
+    # quadruped_controller's robot_controller_gazebo.py (crashes importing
+    # transforms3d, which calls the numpy-2.0-removed np.maximum_sctype),
+    # which meant the robot's gait controller wasn't running at all: cmd_vel was
+    # accepted but produced zero movement, with no error anywhere near Nav2 --
+    # only visible in the walking-node's own crash traceback at launch time.
+    "numpy<2",
+]
+
+[tool.uv]
+package = false

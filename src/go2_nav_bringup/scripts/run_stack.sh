@@ -25,9 +25,19 @@
 # for unattended autonomous exploration instead of manual teleop. Off by default -- same
 # reasoning as everything else here defaulting to manual control: driving the robot
 # unattended is an opt-in choice, not the default.
+#
+# Semantic-map data collection (coverage_tour.launch.py) is NOT one of this script's
+# flags -- run it separately, in its own terminal, once this stack is up:
+#   ros2 launch go2_nav_bringup coverage_tour.launch.py
+# It owns its own bag recording (see that script's docstring), so there's nothing
+# else to start alongside it.
+#
 # Ctrl+C stops everything this script started.
 
 set -u
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 ODOM_BACKEND="kiss_icp"
 EXPLORE=0
@@ -60,6 +70,17 @@ case "$ODOM_BACKEND" in
         ;;
 esac
 
+# Semantic-nav's ML deps (torch, CLIP, SAM) live in a uv-managed venv at the repo
+# root, not apt/rosdep -- see pyproject.toml. Auto-source it here (rather than
+# requiring every terminal to remember to) so ros2 launch's child processes (which
+# exec their installed script via its own `#!/usr/bin/env python3` shebang,
+# resolving through this shell's PATH) pick up the venv's python3 automatically.
+# Harmless no-op for pure sim/nav runs that never touch semantic-nav scripts.
+if [ -f "$REPO_ROOT/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "$REPO_ROOT/.venv/bin/activate"
+fi
+
 # office_fastlio.rviz swaps which backend's accumulated-map display is
 # enabled (FastLioGlobalMap vs. KissIcpLocalMap) -- each backend only publishes its
 # own map topic, so the "other" display would just sit empty otherwise.
@@ -76,7 +97,7 @@ fi
 # that invoked them, so a bare "go2_nav_bringup" term matched and killed this
 # very script the moment it ran (confirmed live: printed "Killed" and exited
 # right after the cleanup step, before launching anything).
-PROJECT_PROCS="gz sim|ros_gz_bridge|quadruped_controller/lib|ros2 launch go2_nav_bringup|kiss_icp_node|spark_lio_mapping|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager|frontier_explorer"
+PROJECT_PROCS="gz sim|ros_gz_bridge|quadruped_controller/lib|ros2 launch go2_nav_bringup|kiss_icp_node|spark_lio_mapping|rviz2|slam_toolbox|controller_server|planner_server|behavior_server|bt_navigator|waypoint_follower|velocity_smoother|collision_monitor|opennav_docking|route_server|smoother_server|pointcloud_to_laserscan_node|lifecycle_manager|frontier_explorer|coverage_tour"
 
 # Belt-and-suspenders on top of the narrowed pattern above: explicitly never
 # kill this script's own PID, in case a future pattern term accidentally

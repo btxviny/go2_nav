@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>go2_semantic_nav</name>
+  <version>0.1.0</version>
+  <description>
+    Semantic navigation for go2_nav: builds a 3D voxel map of CLIP embeddings from
+    a recorded RGB-D + pose rosbag (SAM segmentation + CLIP encoding of each mask,
+    projected via depth and the camera/lidar extrinsic), then resolves a plain-text
+    query (e.g. "orange cone") to a Nav2 goal near the closest-matching voxel.
+
+    The offline map-building script (build_semantic_map.py) has no ROS runtime
+    dependency -- only the online query node (semantic_goal.py) needs rclpy. Both
+    need the ML deps (torch, CLIP, SAM) declared in the repo root's pyproject.toml
+    and installed via `uv sync`, NOT rosdep -- run `uv sync` before using this
+    package. See the repo README's "Semantic navigation" section.
+  </description>
+  <maintainer email="viny@example.com">viny</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>nav2_simple_commander</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

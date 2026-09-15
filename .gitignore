@@ -16,6 +16,11 @@
 __pycache__/
 *.pyc
 
+# uv-managed venv (repo root) -- reproducible from pyproject.toml + uv.lock,
+# which ARE committed; the venv itself is machine-specific (--system-site-packages
+# links against this machine's /opt/ros/jazzy install).
+/.venv/
+
 # Editor swap files -- a stray one (vim, another machine/user entirely) was
 # accidentally committed upstream and carried along into this repo; ignore
 # the pattern so it can't happen again from any editor.
