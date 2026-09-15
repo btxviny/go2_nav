@@ -1,0 +1,98 @@
+/**:
+  ros__parameters:
+    # --- Frontier detection (Wavefront Frontier Detection) ---
+    # Confirmed live: the robot fixated on a desk pod at the center of the office and
+    # got wedged between desk/chair legs. Root cause: the narrow gaps between furniture
+    # legs generate lots of tiny frontier slivers (a handful of free cells bordering the
+    # unknown space behind a leg), and info_gain_radius_m below then scores each one as
+    # high-value even though that unknown space is usually permanently occluded (never
+    # actually resolvable from a reachable pose) -- the robot keeps chasing it because
+    # the "gain" never pays off but never goes away either. Raised well above furniture-gap
+    # size (a real room frontier is comfortably hundreds of cells) so these get dropped
+    # before they're even scored.
+    min_frontier_cells: 25  # was 6 -- drop furniture-gap-sized slivers, not just noise
+    seed_search_radius_cells: 15  # ~0.75m at this stack's 0.05m map resolution
+
+    # --- Goal candidate scoring ---
+    # How many top-utility clusters to refine with a real Nav2 path length per cycle.
+    candidate_k: 5
+    # Radius (m) around each frontier centroid used to estimate "information gain" --
+    # the unknown-cell area a visit is likely to reveal, in m^2. Combined with a real
+    # Nav2 path length into one utility score in choose_goal():
+    #   utility = gain_m2 - info_gain_weight * path_length_m
+    # This is what lets a high-gain frontier win over a slightly-nearer but low-value
+    # one, instead of the pure nearest-reachable heuristic this replaced.
+    # Lowered from 2.0: a wide radius sweeps in a lot of the permanently-occluded shadow
+    # behind clutter (desk/chair legs) as if it were genuinely revealable area, inflating
+    # gain right around furniture -- the same desk-pod fixation min_frontier_cells above
+    # addresses from the other side (fewer bogus candidates in the first place).
+    info_gain_radius_m: 1.0
+    # Meters of path cost considered equivalent to 1 m^2 of expected new area. Higher
+    # values bias toward the old nearest-frontier behavior; lower values bias toward
+    # maximizing new coverage per goal regardless of distance. 1.0 means "walking 1
+    # extra meter is worth it only if it reveals at least 1 extra m^2" -- a reasonable
+    # starting point for this ~20x20m office, not independently tuned against real
+    # exploration runs yet.
+    info_gain_weight: 1.0
+
+    # --- Goal filtering / anti-loop guards ---
+    # Confirmed live: a frontier cluster centroid can legitimately fall within
+    # nav2_params.yaml's xy_goal_tolerance (0.25m) of the robot's own current position
+    # (e.g. self-hit lidar noise on the walking gait). Nav2 then reports SUCCEEDED
+    # instantly without the robot moving, so the same cluster gets rechosen forever.
+    # Requiring every candidate to be meaningfully farther than goal tolerance forces
+    # real movement before Nav2 can call a goal done.
+    min_goal_dist_m: 0.6
+    # Defense in depth alongside min_goal_dist_m: a genuine walk to a frontier at this
+    # stack's tuned ~0.4 m/s cruise speed cannot finish in under a second even counting
+    # acceleration ramp-up, so a suspiciously-instant "success" is treated as a failure.
+    instant_success_s: 1.0
+    # Stops consecutive goals from bouncing between two nearby clusters in the same
+    # small pocket, each individually passing min_goal_dist_m without net progress.
+    # Checked against the *previous* goal actually sent, not the robot's position.
+    # Raised from 1.0: at 1.0m this barely filtered anything -- gain-weighted scoring
+    # already tends to pick whatever's nearby-and-decent right after arriving somewhere,
+    # so consecutive goals could still land close together. 2.5m forces each new goal to
+    # be a real jump to a different part of the room/office rather than local dithering.
+    # choose_goal() falls back to the unfiltered set if nothing clears this (e.g.
+    # finishing off a small room) -- see its docstring -- so this can't strand
+    # exploration in a genuinely small remaining pocket.
+    min_consecutive_goal_dist_m: 2.5
+
+    # Raised from 0.5: a failed/stuck goal right at a cluttered desk pod only excluded a
+    # tiny circle at that exact point, so WFD immediately found another frontier sliver a
+    # few cm away in the same pod next cycle (the underlying map shifts slightly between
+    # attempts too, so the new centroid often wasn't even inside the old 0.5m circle).
+    # Wide enough to cover a typical desk-pod-sized clutter cluster, not just one point in it.
+    blacklist_radius_m: 1.5
+
+    # --- Exploration bounds ---
+    # The office is a ~20x20m building centered on the origin. Lidar can see
+    # through/around the glass entrance door, which without this filter creates
+    # "frontiers" leading the robot to try to explore the outdoors.
+    building_bounds_x_min: -10.5
+    building_bounds_x_max: 10.5
+    building_bounds_y_min: -10.5
+    building_bounds_y_max: 10.5
+
+    # --- Budgets / safety net ---
+    # "No frontiers left" is the real completion signal; these are only a safety net
+    # against a genuine bug (e.g. an infinite retry loop) running forever unattended --
+    # intentionally generous so they don't fire during a normal run.
+    max_attempts: 1000
+    max_runtime_s: 3600.0
+    goal_timeout_s: 90.0
+    max_retries_per_goal: 1  # retries before a repeatedly-failing location is blacklisted
+    retry_backoff_s: 1.5  # pause before retrying, to let a transient TF hiccup clear
+
+    # --- Stuck detection / recovery ---
+    # If this many goals in a row fail (not just the same one repeatedly), the robot is
+    # very likely physically stuck rather than just having picked a bad frontier --
+    # trigger an explicit unstuck maneuver instead of continuing to retry.
+    # Lowered from 3: getting physically wedged between furniture legs is exactly the
+    # "actually stuck" case this is meant to catch quickly, not just a bad-frontier
+    # retry -- waiting a full 3 failures burned more time fixated on the same desk pod
+    # than necessary before backing off and looking elsewhere.
+    stuck_after_consecutive_failures: 2
+    unstuck_backup_dist_m: 1.0
+    unstuck_spin_dist_rad: 3.14159265358979  # full 180 -- a fresh look at the surroundings

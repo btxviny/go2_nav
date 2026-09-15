@@ -109,10 +109,21 @@ you actually want Option B instead -- it changes Phase 2 below substantially.
   as before, but this is the first real test of that combination).
 
 | *4. Autonomous exploration*
-| Implement and run `frontier_explorer.py` (nearest-frontier heuristic,
-  `nav2_simple_commander`-based -- see the main plan file's Step 3 for the
-  detailed design) against the now-KISS-ICP-backed stack. This is the actual
-  "send target goals on its own" deliverable.
+| Implement and run `frontier_explorer.py` (`nav2_simple_commander`-based --
+  see the main plan file's Step 3 for the detailed design) against the
+  now-KISS-ICP-backed stack. This is the actual "send target goals on its
+  own" deliverable.
++
+Goal selection was originally a pure nearest-reachable-frontier heuristic,
+refined by real Nav2 path length over the top-K nearest candidates. Updated
+to an information-gain-aware utility instead: each frontier cluster now also
+carries an estimated `gain_m2` (unknown-cell area within a configurable
+radius of its centroid), and candidates are scored by
+`gain_m2 - info_gain_weight * path_length_m` rather than path length alone --
+so a frontier that reveals a lot of new space can win over a nearer,
+low-value one. All of `frontier_explorer.py`'s former hardcoded constants
+(this included) are now ROS2 parameters backed by
+`config/frontier_explorer.yaml`, which documents each one.
 
 | *5. (follow-up)* Map persistence + rosbag
 | `map_saver_cli` + `record_bag.sh`, already scoped as follow-ups in the main

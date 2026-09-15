@@ -14,11 +14,26 @@
 
     mode: mapping
     map_update_interval: 2.0
+    # Reverted to the stock 0.05/0.2/0.2/0.05 (resolution/minimum_travel_distance/
+    # minimum_travel_heading/correlation_search_space_smear_deviation) below, and
+    # throttle_scans stayed at its stock 2. Three rounds of tightening these together
+    # (chasing better chair/desk-leg representation in the occupancy grid) each
+    # reproduced the same failure live: slam_toolbox fell behind real time, stopped
+    # publishing map->odom for multi-second stretches (TF buffer extrapolation errors),
+    # which broke Nav2's own path planning too ("all candidates unreachable" every
+    # cycle) and looked exactly like the robot being physically stuck when it was
+    # actually a timing/CPU problem no unstick maneuver could fix -- even at the most
+    # conservative tier tried (resolution 0.04, minimum_travel 0.15, throttle_scans 2).
+    # This machine's real-time budget doesn't support finer SLAM mapping resolution
+    # for this stack right now. The thin-obstacle representation problem this was
+    # trying to solve is still real and unresolved -- revisit via a different lever
+    # (e.g. more compute headroom, or a costmap/footprint-level fix instead of raising
+    # mapping resolution) rather than retrying the same knob further.
     resolution: 0.05
     max_laser_range: 25.0
     min_laser_range: 0.15
     transform_publish_period: 0.02
-    transform_timeout: 0.5  
+    transform_timeout: 0.5
     tf_buffer_duration: 30.0
 
     throttle_scans: 2

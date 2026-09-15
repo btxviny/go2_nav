@@ -192,6 +192,7 @@ Simplest is still just separate foreground terminals, one per command above.
 |---|---|
 | [docs/ROS2_BASICS.md](docs/ROS2_BASICS.md) | **New to ROS2? Start here.** Workspace layout, colcon build, package.xml, setup.bash, and common day-to-day workflows, all explained using this repo's own files |
 | [INSTALL.md](docs/INSTALL.md) | Full from-scratch install walkthrough |
+| [docs/SIM_TO_REAL.md](docs/SIM_TO_REAL.md) | Where sim sensor fidelity diverges from the real Go2 EDU hardware, and the connectivity/networking realities (Ethernet vs WiFi, DDS domain bridging, QoS) to plan for before deploying on the physical robot |
 
 ---
 
