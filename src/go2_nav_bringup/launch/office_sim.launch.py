@@ -2,8 +2,13 @@
 
 Based on go2_ros2_sim_py's gazebo_sim/launch/launch_sim.launch.py, with:
   - our office.sdf instead of empty/cafe.world
-  - spawn pose at the entrance (0, -9), clear of walls/furniture (see plan:
-    rasterized collision clearance = 1.00 m there)
+  - spawn pose near the building's geometric centre (0, 1.1), in the open-plan area
+    between the podC workstation cluster and the room's north wall -- clear of
+    walls/furniture (rasterized collision clearance against every object in
+    blender/scene_objects.json: >=1.00 m, nearest object podC_workstation3) and only
+    ~1.1 m from the true centre (0, 0) of the building's [-10, 10]x[-10, 10] interior,
+    itself unusable as a spawn point (0 clearance -- sits right on top of
+    podC_workstation3). Was (0, -9), at the reception entrance, before.
   - GZ_SIM_RESOURCE_PATH extended so model://office_scene resolves
   - our bridge.yaml added for the RGBD camera + 3D lidar
   - rviz/Nav2-bringup left out; those are separate launch files (Phase 3/4)
@@ -50,7 +55,7 @@ def generate_launch_description():
         description='Use /clock from Gazebo')
 
     x_pose = LaunchConfiguration('x_pose', default='0.0')
-    y_pose = LaunchConfiguration('y_pose', default='-9.0')
+    y_pose = LaunchConfiguration('y_pose', default='1.1')
     # 0.30 -- empirically confirmed live (not just RobotController.py's
     # documented default_height of 0.25; that undershot the real geometric
     # clearance for the exact stance joint angles below, causing instant
