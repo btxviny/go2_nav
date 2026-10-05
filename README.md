@@ -3,7 +3,7 @@
 ![Go2 driving around the simulated office](docs/media/go2_nav_office.gif)
 
 A Unitree Go2 quadruped, simulated in Gazebo Harmonic inside a procedurally-generated
-office built in Blender, carrying a head-mounted RGBD camera and a back-mounted 3D lidar.
+office, carrying a head-mounted RGBD camera and a back-mounted 3D lidar.
 Drivable by keyboard with full sensor visualization in RViz; SLAM mapping and **Nav2
 point-to-point navigation both work** (KISS-ICP drives the real odometry — see
 [Navigation](docs/ARCHITECTURE.md#kiss-icp-real-odom-source)); you can send it a goal by
